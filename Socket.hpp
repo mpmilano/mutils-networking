@@ -14,12 +14,18 @@ namespace mutils{
 	
 struct Socket {
 private:
-	struct Internals;
-	Internals *i;
+	struct Internals{
+		const int sockID;
+		Internals(int);
+		virtual ~Internals();
+	};
+		
+	std::shared_ptr<Internals> i;
+		
 public:
 
 	Socket(int sockID);
-	virtual ~Socket();
+	Socket(const Socket&) = default;
 
 	static Socket connect(int ip, int port);
 

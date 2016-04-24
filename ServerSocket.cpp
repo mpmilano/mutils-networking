@@ -23,7 +23,7 @@ namespace mutils{
 		//setsockopt(sockfd, SOL_SOCKET, SO_LINGER, (void *)&lingerStruct, sizeof(lingerStruct));
 		if (sockfd < 0){
 			std::cerr << "ERROR opening socket" << std::endl;
-			return;
+			throw SocketException{};
 		}
 		bzero((char *) &serv_addr, sizeof(serv_addr));
 		serv_addr.sin_family = AF_INET;
@@ -32,7 +32,7 @@ namespace mutils{
 		if (bind(sockfd, (struct sockaddr *) &serv_addr,
 				 sizeof(serv_addr)) < 0){
 			std::cerr << "ERROR on binding" << std::endl;
-			return;
+			throw SocketException{};
 		}
 		AtScopeEnd ase{[&](){if (!complete) close(sockfd);}};
 		{
@@ -42,6 +42,19 @@ namespace mutils{
 		
 		complete = true;
 		this->i = new Internals{sockfd};
+	}
+
+	ServerSocket::ServerSocket(int listen,
+							   std::function<void (Socket)> onReceipt,
+							   bool async):ServerSocket(listen){
+		if (async){
+			std::thread([onReceipt,sock = receive()] () mutable {
+					onReceipt(std::move(sock));
+				}).detach();
+		}
+		else {
+			onReceipt(receive());
+		}
 	}
 
 	ServerSocket::~ServerSocket(){

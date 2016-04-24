@@ -10,6 +10,10 @@ private:
 	Internals *i;
 public:
 	ServerSocket(int listen);
+	ServerSocket(int listen,
+				 std::function<void (Socket)> onReceipt,
+				 bool async = false);
+	ServerSocket(const ServerSocket&) = delete;
 	Socket receive();
 	~ServerSocket();
 };

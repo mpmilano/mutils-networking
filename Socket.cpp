@@ -8,12 +8,12 @@
 								
 namespace mutils{
 
-	struct Socket::Internals{
-		const int sockID;
-	};
+	Socket::Internals::Internals(int sid):sockID(sid){}
+	Socket::Internals::~Internals(){
+		if (sockID > 0) close(sockID);
+	}
 	
 	Socket::Socket(int sockID):i(new Internals{sockID}){}
-	Socket::~Socket(){ close(i->sockID); delete i; }
 
 	bool Socket::valid() const {
 		return i->sockID > 0;
