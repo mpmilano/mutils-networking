@@ -15,7 +15,7 @@ namespace mutils{
 struct Socket {
 private:
 	struct Internals{
-		const int sockID;
+		int sockID;
 		Internals(int);
 		virtual ~Internals();
 	};

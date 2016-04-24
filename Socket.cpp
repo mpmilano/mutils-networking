@@ -31,7 +31,8 @@ namespace mutils{
 		}
 		bool complete = false;
 		AtScopeEnd ase{[&](){if (!complete) close(sockfd);}};
-		server = gethostbyaddr(&ip,sizeof(ip),AF_INET);
+		server = gethostbyname(string_of_ip(ip).c_str());
+		assert(server);
 		bzero((char *) &serv_addr, sizeof(serv_addr));
 		serv_addr.sin_family = AF_INET;
 		bcopy((char *)server->h_addr,
@@ -47,18 +48,25 @@ namespace mutils{
 	}
 
 	void Socket::receive(const std::size_t s, void* where){
-		int n = read(i->sockID,where,s);
+		int n = recv(i->sockID,where,s,MSG_WAITALL);
 		if (n < 0) {
 			std::stringstream err;
 			err << "expected " << s << " bytes, received " << n << " accompanying error: " << std::strerror(errno);
 			throw ProtocolException(err.str());
 		}
+		else if (n == 0){
+			std::stringstream err;
+			err << "expected " << s << " bytes, received " << n << " before connection broken";
+			i->sockID = -1;
+			throw ProtocolException(err.str());
+		}
 		while (n < s) {
 			//std::cout << "WARNING: only got " << n << " bytes, expected " << s << " bytes" <<std::endl;
-			int k = read(i->sockID,((char*) where) + n,s-n);
+			int k = recv(i->sockID,((char*) where) + n,s-n,MSG_WAITALL);
 			if (k <= 0) {
 				std::stringstream err;
 				err << "expected " << s << " bytes, received " << n << " accompanying error: " << std::strerror(errno);
+				if (k == 0) i->sockID = -1;
 				throw ProtocolException(err.str());
 			}
 			n += k;
@@ -66,7 +74,18 @@ namespace mutils{
 	}
 
 	void Socket::send(std::size_t amount, void const * what){
-		bool complete = write(i->sockID,what,amount) == amount;
-		assert(complete);
+		if (valid()){
+			int sent = ::send(i->sockID,what,amount,MSG_NOSIGNAL);
+			bool complete = sent == amount;
+			if (!complete) {
+				if (sent == -1 && errno == EPIPE) i->sockID = -1;
+				else if (sent == -1){
+					std::stringstream err;
+					err << "tried sending " << amount << " bytes, achieved " << sent << " accompanying error: " << std::strerror(errno);
+					throw ProtocolException(err.str());
+				}
+			}
+		}
+		else throw ProtocolException("attempt to send on broken connection!");
 	}
 }
