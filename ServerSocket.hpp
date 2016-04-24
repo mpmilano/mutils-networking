@@ -1,13 +1,21 @@
 #pragma once
 #include "Socket.hpp"
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <memory>
 
 namespace mutils{
 
 struct ServerSocket {
-
+	struct Internals{
+		const int sockID;
+		struct sockaddr_in cli_addr;
+		socklen_t clilen{sizeof(cli_addr)};
+		volatile bool alive{true};
+		Internals(int sockID);
+	};
 private:
-	struct Internals;
-	Internals *i;
+	std::shared_ptr<Internals> i;
 public:
 	ServerSocket(int listen);
 	ServerSocket(int listen,

@@ -8,12 +8,6 @@
 
 namespace mutils{
 
-	struct ServerSocket::Internals {
-		const int sockID;
-		struct sockaddr_in cli_addr;
-		socklen_t clilen{sizeof(cli_addr)};
-	};
-
 	ServerSocket::ServerSocket(int portno){
 		int sockfd;
 		bool complete = false;
@@ -41,35 +35,48 @@ namespace mutils{
 		}
 		
 		complete = true;
-		this->i = new Internals{sockfd};
+		this->i.reset(new Internals{sockfd});
+	}
+
+	ServerSocket::Internals::Internals(int s):sockID(s){}
+
+	namespace {
+		Socket receive_impl(ServerSocket::Internals& i){
+			int newsockfd = accept(i.sockID,
+								   (struct sockaddr *) &i.cli_addr,
+								   &i.clilen);
+			if (newsockfd < 0){
+				std::cerr << "ERROR on accept: "
+						  << std::strerror(errno)
+						  << std::endl;
+			}
+			return Socket{newsockfd};
+		}
 	}
 
 	ServerSocket::ServerSocket(int listen,
 							   std::function<void (Socket)> onReceipt,
 							   bool async):ServerSocket(listen){
-		if (async){
-			std::thread([onReceipt,sock = receive()] () mutable {
-					onReceipt(std::move(sock));
-				}).detach();
-		}
-		else {
-			onReceipt(receive());
-		}
+		std::thread([async,onReceipt,i = this->i](){
+				while (i->alive) {
+					if (async){
+						std::thread([onReceipt,sock = receive_impl(*i)] () {
+								onReceipt(sock);
+							}).detach();
+					}
+					else {
+						onReceipt(receive_impl(*i));
+					}
+				}
+			}).detach();
 	}
 
 	ServerSocket::~ServerSocket(){
-		close(i->sockID); delete i;
+		close(i->sockID);
+		i->alive = false;
 	}
 
 	Socket ServerSocket::receive(){
-		int newsockfd = accept(i->sockID,
-							   (struct sockaddr *) &i->cli_addr,
-							   &i->clilen);
-		if (newsockfd < 0){
-			std::cerr << "ERROR on accept: "
-					  << std::strerror(errno)
-					  << std::endl;
-		}
-		return Socket{newsockfd};
+		return receive_impl(*i);
 	}
 }
