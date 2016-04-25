@@ -28,18 +28,25 @@ namespace mutils{
 			std::cerr << "ERROR on binding" << std::endl;
 			throw SocketException{};
 		}
-		AtScopeEnd ase{[&](){if (!complete) close(sockfd);}};
+		AtScopeEnd ase{[&](){if (!complete) {
+					//close(sockfd);
+					std::cout << "Early close on socket " << sockfd << std::endl;
+				}
+			}
+		};
 		{
 			bool success = listen(sockfd,50) == 0;
 			assert(success);
 		}
 		
 		complete = true;
+		std::cout << "initialization done: port "
+				  << portno << ", " << sockfd << std::endl;
 		this->i.reset(new Internals{sockfd});
 	}
-
+	
 	ServerSocket::Internals::Internals(int s):sockID(s){}
-
+	
 	namespace {
 		Socket receive_impl(ServerSocket::Internals& i){
 			int newsockfd = accept(i.sockID,
@@ -48,35 +55,37 @@ namespace mutils{
 			if (newsockfd < 0){
 				std::cerr << "ERROR on accept: "
 						  << std::strerror(errno)
+						  << '\n' << "(server socket ID was " << i.sockID << ")"
 						  << std::endl;
 			}
 			return Socket{newsockfd};
 		}
 	}
 
-	ServerSocket::ServerSocket(int listen,
-							   std::function<void (Socket)> onReceipt,
-							   bool async):ServerSocket(listen){
-		std::thread([async,onReceipt,i = this->i](){
-				while (i->alive) {
-					if (async){
-						std::thread([onReceipt,sock = receive_impl(*i)] () {
-								onReceipt(sock);
-							}).detach();
-					}
-					else {
-						onReceipt(receive_impl(*i));
-					}
-				}
-			}).detach();
-	}
-
 	ServerSocket::~ServerSocket(){
 		close(i->sockID);
-		i->alive = false;
 	}
-
+	
 	Socket ServerSocket::receive(){
 		return receive_impl(*i);
+	}
+
+	AcceptConnectionLoop::AcceptConnectionLoop(std::function<void (bool&, Socket)> onReceipt)
+		:onReceipt(onReceipt){}
+
+	void AcceptConnectionLoop::loop_until_dead(int listen, bool async){
+		ServerSocket ss{listen};
+		while (*alive) {
+			if (async){
+				std::thread([alive = this->alive,
+							 onReceipt = this->onReceipt,
+							 sock = ss.receive()] () {
+								onReceipt(*alive,sock);
+							}).detach();
+			}
+			else {
+				onReceipt(*alive,ss.receive());
+			}
+		}
 	}
 }

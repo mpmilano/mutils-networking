@@ -11,19 +11,25 @@ struct ServerSocket {
 		const int sockID;
 		struct sockaddr_in cli_addr;
 		socklen_t clilen{sizeof(cli_addr)};
-		volatile bool alive{true};
 		Internals(int sockID);
 	};
 private:
-	std::shared_ptr<Internals> i;
+	std::unique_ptr<Internals> i;
 public:
 	ServerSocket(int listen);
-	ServerSocket(int listen,
-				 std::function<void (Socket)> onReceipt,
-				 bool async = false);
 	ServerSocket(const ServerSocket&) = delete;
 	Socket receive();
 	~ServerSocket();
 };
+
+	struct AcceptConnectionLoop {
+		std::shared_ptr<bool> alive{new bool{true}};
+		const std::function<void (bool&, Socket)> onReceipt;
+		
+		AcceptConnectionLoop(std::function<void (bool&, Socket)> onReceipt);
+		AcceptConnectionLoop(const AcceptConnectionLoop&) = default;
+		
+		void loop_until_dead(int listen, bool async = false);
+	};
 
 }
