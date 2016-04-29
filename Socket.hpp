@@ -71,7 +71,8 @@ public:
 			"Error: cannot serialize this type.");
 		auto size = bytes_size(t);
 		char buf[size];
-		assert(size == to_bytes(t,buf));
+                int tbs = to_bytes(t,buf);
+                assert(size == tbs);
 		send(size,buf);
 	}
 };
