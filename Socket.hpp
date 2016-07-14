@@ -7,7 +7,7 @@ namespace mutils{
 	struct ProtocolException : public std::exception{
 		const std::string why;
 		ProtocolException(std::string why):why(why){}
-		const char* what() const _NOEXCEPT{
+		const char* what() const noexcept{
 			return why.c_str();
 		}
 	};
