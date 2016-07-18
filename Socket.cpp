@@ -60,7 +60,7 @@ namespace mutils{
 			i->sockID = -1;
 			throw ProtocolException(err.str());
 		}
-		while (n < s) {
+		while (((std::size_t)n) < s) {
 			//std::cout << "WARNING: only got " << n << " bytes, expected " << s << " bytes" <<std::endl;
 			int k = recv(i->sockID,((char*) where) + n,s-n,MSG_WAITALL);
 			if (k <= 0) {
@@ -75,8 +75,8 @@ namespace mutils{
 
 	void Socket::send(std::size_t amount, void const * what){
 		if (valid()){
-			int sent = ::send(i->sockID,what,amount,MSG_NOSIGNAL);
-			bool complete = sent == amount;
+			auto sent = ::send(i->sockID,what,amount,MSG_NOSIGNAL);
+			bool complete = ((std::size_t)sent) == amount;
 			if (!complete) {
 				if (sent == -1 && errno == EPIPE) i->sockID = -1;
 				else if (sent == -1){
