@@ -2,29 +2,37 @@
 #include "Socket.hpp"
 #include "resource_pool.hpp"
 #include "better_cv.hpp"
+#include <shared_mutex>
+#include "ServerSocket.hpp"
 
 namespace mutils{
 	namespace batched_connection {
 
 		struct batched_connections_impl;
-		struct SocketBundle {
+
+		struct SocketBundle{
 			Socket sock;
 			condition_variable cv;
 			SocketBundle(Socket sock):sock(sock){}
-			operator bool() const {return true;}
+			SocketBundle() = default;
+			SocketBundle(const SocketBundle&) = delete;
 		};
 		
-		using SocketPool = ResourcePool<SocketBundle,batched_connections_impl*>;
-		using LockedResource = typename SocketPool::LockedResource;
-		using WeakResource = typename SocketPool::WeakResource;
-		
-		struct connection : public ::mutils::connection{
-			WeakResource sock;
-			connection(batched_connections_impl &);
-			connection(const connection&);
-			std::size_t recv(std::size_t expected, char * parent_buf);
-			std::size_t send(std::size_t expected, char const * const buf);
+		struct connection : public ::mutils::connection {
+			SocketBundle& sock;
+			const std::size_t id;
+			connection(SocketBundle& s, std::size_t id);
+			operator bool() const {return valid();}
+			connection(const connection&) = delete;
+			connection(connection&&) = default;
+			std::size_t receive(std::size_t expected, void * parent_buf);
+			std::size_t send(std::size_t expected, void const * const buf);
+			bool valid () const {return sock.sock.valid();}
 		};
+		
+		using SocketPool = ResourcePool<connection>;
+		using locked_connection = typename SocketPool::LockedResource;
+		using weak_connection = typename SocketPool::WeakResource;
 		
 		
 		struct batched_connections {
@@ -32,18 +40,36 @@ namespace mutils{
 			Internals *i;
 			batched_connections(const int ip, const int port, const int max_connections);
 			batched_connections(const batched_connections&) = delete;
-			connection spawn();
+			locked_connection spawn();
 			~batched_connections();
 		};
 
 		struct receiver {
-			ServerSocket ss;
-			std::map<std::size_t,std::weak_ptr<connection> > dispatch;
+			//returns expected next message size
+			struct connection;
+			const int port;
+			using action_t =
+				std::function<std::size_t (char*, ::mutils::connection&)>;
+			
+			struct action_items{
+				action_t action;
+				std::size_t next_expected_size;
+				std::mutex mut;
+				action_items() = default;
+				action_items(std::pair<action_t, std::size_t> a)
+					:action(a.first),next_expected_size(a.second){}
+				action_items(action_items&&) = default;
+			};
+			std::function<std::pair<action_t, std::size_t> ()> new_connection;
 
-			template<typename T>
-			std::future<T> accept(std::function<T (connection)> do_this){
-				std::async::launch()
-			}
+			std::shared_mutex map_lock;
+			std::map<std::size_t,  action_items> receivers;
+			AcceptConnectionLoop acl;
+			std::shared_mutex death_lock;
+
+			void on_accept(bool& alive, Socket s);
+
+			receiver(int port, decltype(new_connection) new_connection);
 			~receiver();
 		};
 	}

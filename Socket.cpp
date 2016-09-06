@@ -14,6 +14,11 @@ namespace mutils{
 	}
 	
 	Socket::Socket(int sockID):i(new Internals{sockID}){}
+	Socket::Socket():Socket(0){}
+	Socket& Socket::operator=(const Socket &s){
+		i = s.i;
+		return *this;
+	}
 
 	bool Socket::valid() const {
 		return i->sockID > 0;
@@ -47,7 +52,7 @@ namespace mutils{
 		return Socket{sockfd};
 	}
 
-	void Socket::receive(const std::size_t s, void* where){
+	std::size_t Socket::receive(const std::size_t s, void* where){
 		int n = recv(i->sockID,where,s,MSG_WAITALL);
 		if (n < 0) {
 			std::stringstream err;
@@ -71,9 +76,10 @@ namespace mutils{
 			}
 			n += k;
 		}
+		return s;
 	}
 
-	void Socket::send(std::size_t amount, void const * what){
+	std::size_t Socket::send(std::size_t amount, void const * what){
 		if (valid()){
 			auto sent = ::send(i->sockID,what,amount,MSG_NOSIGNAL);
 			bool complete = ((std::size_t)sent) == amount;
@@ -87,5 +93,12 @@ namespace mutils{
 			}
 		}
 		else throw ProtocolException("attempt to send on broken connection!");
+		return amount;
+	}
+
+	std::size_t Socket::peek(std::size_t how_much, void* where){
+		auto ret = recv(i->sockID, where, how_much, MSG_PEEK);
+		assert(ret == how_much);
+		return ret;
 	}
 }

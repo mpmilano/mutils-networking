@@ -1,4 +1,5 @@
 #pragma once
+#include "connection.hpp"
 #include "SerializationSupport.hpp"
 
 namespace mutils{
@@ -12,68 +13,42 @@ namespace mutils{
 		}
 	};
 	
-struct Socket {
-private:
-	struct Internals{
-		int sockID;
-		Internals(int);
-		virtual ~Internals();
+	struct Socket : public connection{
+	private:
+		struct Internals{
+			int sockID;
+			Internals(int);
+			virtual ~Internals();
+		};
+		
+		std::shared_ptr<Internals> i;
+		
+	public:
+		
+		Socket(int sockID);
+		Socket();
+		Socket(const Socket&) = default;
+		Socket& operator=(const Socket&);
+		
+		static Socket connect(int ip, int port);
+		
+		bool valid() const;
+		
+		std::size_t receive(std::size_t how_much, void* where);
+
+		template<typename... T> auto receive(T&& ... t){
+			connection& _this = *this;
+			return _this.receive(std::forward<T>(t)...);
+		}
+
+		template<typename... T> auto send(T&& ... t){
+			connection& _this = *this;
+			return _this.send(std::forward<T>(t)...);
+		}
+		
+		std::size_t send(std::size_t how_much, void const * what);
+
+		std::size_t peek(std::size_t how_much, void* where);
+		
 	};
-		
-	std::shared_ptr<Internals> i;
-		
-public:
-
-	Socket(int sockID);
-	Socket(const Socket&) = default;
-
-	static Socket connect(int ip, int port);
-
-	bool valid() const;
-	
-	void receive(std::size_t how_much, void* where);
-	
-	template<typename T>
-	void receive(T &t){
-		static_assert(std::is_pod<T>::value,
-					  "Error: can't do non-POD right now");
-		static_assert(std::is_trivially_constructible<T>::value,
-					  "Error: can't build this with new correctly");
-		receive(sizeof(T),&t);
-	}
-
-	template<typename T>
-	std::unique_ptr<T> receive(){
-		static_assert(std::is_pod<T>::value,
-					  "Error: can't do non-POD right now");
-		static_assert(std::is_trivially_constructible<T>::value,
-					  "Error: can't build this with new correctly");
-		std::unique_ptr<T> ret{new T()};
-		receive(sizeof(T),ret.get());
-		return ret;
-	}
-
-	
-	template<typename T>
-	std::unique_ptr<T> receive(DeserializationManager* dsm, int nbytes){
-		static_assert(std::is_base_of<ByteRepresentable, T>::value,
-					  "Error: can't do non-POD right now");
-		char recv[nbytes];
-		receive(nbytes,recv);
-		return from_bytes<T>(dsm,recv);
-	}
-
-	void send(std::size_t how_much, void const * what);
-	
-	template<typename T>
-	void send(const T &t){
-		static_assert(std::is_pod<T>::value || std::is_base_of<ByteRepresentable, T>::value,
-			"Error: cannot serialize this type.");
-		auto size = bytes_size(t);
-		char buf[size];
-		auto tbs = to_bytes(t,buf);
-		assert(size == tbs);
-		send(size,buf);
-	}
-};
 }
