@@ -14,8 +14,8 @@ namespace mutils{
 			Socket sock;
 			condition_variable cv;
 			SocketBundle(Socket sock):sock(sock){}
-			SocketBundle() = default;
 			SocketBundle(const SocketBundle&) = delete;
+			SocketBundle(SocketBundle&&) = delete;
 		};
 		
 		struct connection : public ::mutils::connection {
@@ -65,7 +65,7 @@ namespace mutils{
 			std::shared_mutex map_lock;
 			std::map<std::size_t,  action_items> receivers;
 			AcceptConnectionLoop acl;
-			std::shared_mutex death_lock;
+			std::thread receiver_thread;
 
 			void on_accept(bool& alive, Socket s);
 

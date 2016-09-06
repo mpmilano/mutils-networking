@@ -13,34 +13,39 @@ namespace mutils{
 		const int ip;
 		const int port;
 		const std::size_t max_connections;
+		const std::size_t modulous = (max_connections > connection_factor ?
+									  max_connections / connection_factor :
+									  1);
 		std::mutex launch_lock;
-		std::size_t current_connections{0};
+		std::atomic<std::size_t> current_connections{0};
 		SocketPool rp;
-		std::vector<SocketBundle> bundles{
-			max_connections / connection_factor};
+		std::vector<std::unique_ptr<SocketBundle> > bundles{modulous};
 		
 		connection* new_resource(){
 			assert(this);
-			const auto id = current_connections;
-			auto index = id / connection_factor;
-			auto &bundle = bundles[index];
-			std::unique_lock<mutex> l{launch_lock};
-			if (!bundle.sock.valid()){
-				bundle.sock = Socket::connect(ip,port);
+			const std::size_t id = current_connections;
+			auto index = id % (modulous);
+			assert(index < bundles.size());
+			auto &bundle = bundles.at(index);
+			if (!bundle){
+				std::unique_lock<mutex> l{launch_lock};
+				if (!bundle){
+					bundle.reset(new SocketBundle{Socket::connect(ip,port)});
+				}
 			}
 			++current_connections;
 			//don't overflow
 			assert(current_connections > id);
-			return new connection{bundle,id};
+			return new connection{*bundle,id};
 		}
 		batched_connections_impl(const int ip, const int port, const int max_connections)
 			:ip(ip),
 			 port(port),
 			 max_connections(max_connections),
-			 rp(max_connections - (max_connections/connection_factor),max_connections/connection_factor,std::bind(&batched_connections_impl::new_resource,this)){
+			 rp(modulous,max_connections - modulous,std::bind(&batched_connections_impl::new_resource,this)){
 			//pre-init all the connections
-			std::function<void (const locked_connection&, int)> init_all;
-			init_all = [&](const locked_connection&, int ind){
+			std::function<void (const locked_connection&, std::size_t)> init_all;
+			init_all = [&](const locked_connection&, std::size_t ind){
 				if (ind < this->max_connections) {
 					init_all(this->rp.acquire(),ind+1);
 				}

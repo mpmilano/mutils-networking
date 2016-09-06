@@ -14,14 +14,14 @@ namespace mutils{
 	}
 	
 	Socket::Socket(int sockID):i(new Internals{sockID}){}
-	Socket::Socket():Socket(0){}
+	Socket::Socket(){}
 	Socket& Socket::operator=(const Socket &s){
 		i = s.i;
 		return *this;
 	}
 
 	bool Socket::valid() const {
-		return i->sockID > 0;
+		return i && i->sockID > 0;
 	}
 
 	Socket Socket::connect(int ip, int portno){
@@ -53,6 +53,7 @@ namespace mutils{
 	}
 
 	std::size_t Socket::receive(const std::size_t s, void* where){
+		assert(i);
 		int n = recv(i->sockID,where,s,MSG_WAITALL);
 		if (n < 0) {
 			std::stringstream err;
@@ -98,7 +99,8 @@ namespace mutils{
 
 	std::size_t Socket::peek(std::size_t how_much, void* where){
 		auto ret = recv(i->sockID, where, how_much, MSG_PEEK);
-		assert(ret == how_much);
+		assert(ret > 0);
+		assert((std::size_t)ret == how_much);
 		return ret;
 	}
 }

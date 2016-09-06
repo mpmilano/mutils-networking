@@ -19,21 +19,21 @@ namespace mutils{
 				return expected;
 			}
 			bool valid() const {return true;}
-			std::size_t receive(std::size_t how_much, void* where) {assert(false);}
+			std::size_t receive(std::size_t, void*) {assert(false);}
 			connection(const connection&) = delete;
 		};
 
 		receiver::receiver(int port, decltype(new_connection) new_connection)
 			:port(port),
 			 new_connection(new_connection),
-			 acl([this](auto &a, auto b){return this->on_accept(a,b);})
+			 acl([this](auto &a, auto b){return this->on_accept(a,b);}),
+			 receiver_thread{[&]{acl.loop_until_dead(port,true);}}
 		{
-			std::thread{[&]{acl.loop_until_dead(port,true);}}.detach();
+			std::cout << "receiving on port: " << port << std::endl;
 		}
 
 		void receiver::on_accept(bool& alive, Socket s){
 			while (alive) {
-				std::shared_lock<std::shared_mutex> l{death_lock};
 				if (alive) {
 					std::size_t id;
 					s.receive(id);
@@ -68,7 +68,8 @@ namespace mutils{
 		}
 		
 		receiver::~receiver(){
-			std::unique_lock<std::shared_mutex> l{death_lock};
+			*acl.alive = false;
+			receiver_thread.join();
 		}
 	}
 }
