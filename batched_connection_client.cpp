@@ -22,7 +22,6 @@ namespace mutils{
 		std::vector<std::unique_ptr<SocketBundle> > bundles{modulous};
 		
 		connection* new_resource(){
-			assert(this);
 			const std::size_t id = current_connections;
 			auto index = id % (modulous);
 			assert(index < bundles.size());
@@ -43,14 +42,17 @@ namespace mutils{
 			 port(port),
 			 max_connections(max_connections),
 			 rp(modulous,max_connections - modulous,std::bind(&batched_connections_impl::new_resource,this)){
+			//std::cout << "beginning pre-init" << std::endl;
 			//pre-init all the connections
 			std::function<void (const locked_connection&, std::size_t)> init_all;
 			init_all = [&](const locked_connection&, std::size_t ind){
+				//std::cout << "pre-init " << ind << std::endl;
 				if (ind < this->max_connections) {
 					init_all(this->rp.acquire(),ind+1);
 				}
 			};
 			init_all(this->rp.acquire(),0);
+			//std::cout << "pre-init done" << std::endl;
 		}
 	};
 	const constexpr std::size_t batched_connections_impl::connection_factor;
@@ -79,12 +81,15 @@ namespace mutils{
 		}
 		
 		std::size_t connection::send(std::size_t expected, void const * const _buf){
+			//std::cout << "beginning send" << std::endl;
 			char const * const buf = (char*) _buf;
 			return [&](const auto &){
+				//std::cout << "lock acquired for send" << std::endl;
 				sock.sock.send(sizeof(id),&id);
 				bool worked = expected ==
 					sock.sock.send(expected,buf);
 				assert(worked);
+				//std::cout << "send complete" << std::endl;
 				return expected;
 			}(sock.cv.wait([]{return true;}));
 		}

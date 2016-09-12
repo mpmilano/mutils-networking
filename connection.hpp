@@ -7,46 +7,81 @@ namespace mutils{
 //interface.
 struct connection{
 	virtual bool valid() const = 0;
-	virtual	std::size_t receive(std::size_t how_much, void* where) = 0;
-	virtual std::size_t send(std::size_t how_much, void const * const) = 0;
+	std::size_t receive(std::size_t how_many, std::size_t* sizes, void ** bufs);
+	virtual std::size_t send(std::size_t how_many, std::size_t* sizes, void const * const * const) = 0;
+
 	
-	template<typename T>
-	void receive(T &t){
-		static_assert(std::is_pod<T>::value,
+	
+	template<typename... T>
+	void receive(T&... t){
+		static_assert(forall(std::is_pod<T>::value...),
 					  "Error: can't do non-POD right now");
-		receive(sizeof(T),&t);
+		void* recv[] = {&t...};
+		std::size_t size_buf[] = {sizeof(T)...};
+		receive(sizeof...(T),size_buf,recv);
 	}
 
-	template<typename T>
-	std::unique_ptr<T> receive(){
-		static_assert(std::is_pod<T>::value,
+	template<typename... T>
+	auto receive_helper(T*... t){
+		receive(*t...);
+		return std::make_tuple(std::unique_ptr<T>(t)...);
+	}
+
+	template<typename... T>
+	auto receive(){
+		static_assert(forall(std::is_pod<T>::value...),
 					  "Error: can't do non-POD right now");
-		static_assert(std::is_trivially_constructible<T>::value,
+		static_assert(forall(std::is_trivially_constructible<T>::value...),
 					  "Error: can't build this with new correctly");
-		std::unique_ptr<T> ret{new T()};
-		receive(sizeof(T),ret.get());
-		return ret;
+		return receive_helper(new T()...);
 	}
 
+	template<typename> using make_these_ints = int;
+
+	template<typename Fst, typename... Rst>
+	auto receive_helper(DeserializationManager* dsm, void** recv, int indx = 0){
+		return std::tuple_cat(
+			std::make_tuple(from_bytes<Fst>(dsm,(char*)recv[indx])),
+			receive_helper<Rst...>(dsm,recv,indx+1));
+	}
 	
-	template<typename T>
-	std::unique_ptr<T> receive(DeserializationManager* dsm, int nbytes){
-		static_assert(std::is_base_of<ByteRepresentable, T>::value,
+	template<typename T1, typename... T2>
+	auto receive(DeserializationManager* dsm,
+				 int size,
+				 make_these_ints<T2>... sizes){
+		static_assert(std::is_base_of<ByteRepresentable, T1>::value &&
+					  forall(std::is_base_of<ByteRepresentable, T2>::value...),
 					  "Error: can't do non-POD right now");
-		char recv[nbytes];
-		receive(nbytes,recv);
-		return from_bytes<T>(dsm,recv);
+		
+		void* recv[] = {alloca(size),alloca(sizes)...};
+		std::size_t size_buf[] = {size,sizes...};
+		receive(sizeof...(T2) + 1 ,size_buf,recv);
+		return receive_helper<T1,T2...>(dsm,recv);
+	}
+	template<typename T>
+	auto receive(DeserializationManager* dsm, std::size_t size){
+		void* recv[] = {alloca(size)};
+		void** _recv = recv;
+		std::size_t size_buf[] = {size};
+		receive(1 ,size_buf,_recv);
+		return std::get<0>(receive_helper<T>(dsm,recv));
 	}
 
 	template<typename T>
-	void send(const T &t){
-		static_assert(std::is_pod<T>::value || std::is_base_of<ByteRepresentable, T>::value,
-			"Error: cannot serialize this type.");
-		auto size = bytes_size(t);
-		char buf[size];
-		auto tbs = to_bytes(t,buf);
-		assert(size == tbs);
-		send(size,buf);
+	void* to_bytes_helper(const T &t, void* v){
+		to_bytes(t,v);
+		return v;
+	}
+
+	template<typename... T>
+	void send(const T&... t){
+		void *bufs[] = {to_bytes_helper(t,alloca(bytes_size(t)))...};
+		std::size_t sizes[] = {bytes_size(t)...};
+		
+		
+		static_assert(forall((std::is_pod<T>::value || std::is_base_of<ByteRepresentable, T>::value)...),
+			"Error: cannot serialize these types.");
+		send(sizeof...(T),sizes,bufs);
 	}
 	
 };

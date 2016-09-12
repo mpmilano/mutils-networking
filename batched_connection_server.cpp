@@ -26,21 +26,29 @@ namespace mutils{
 		receiver::receiver(int port, decltype(new_connection) new_connection)
 			:port(port),
 			 new_connection(new_connection),
-			 acl([this](auto &a, auto b){return this->on_accept(a,b);}),
-			 receiver_thread{[&]{acl.loop_until_dead(port,true);}}
+			 acl([this](auto &a, auto b){return this->on_accept(a,b);})
 		{
-			std::cout << "receiving on port: " << port << std::endl;
+			//std::cout << "receiving on port: " << port << std::endl;
+		}
+
+		void receiver::loop_until_false_set(){
+			//std::cout << "receiver thread up " << std::endl;
+			acl.loop_until_dead(port,true);
 		}
 
 		void receiver::on_accept(bool& alive, Socket s){
+			//std::cout << "beginning accept loop" << std::endl;
 			while (alive) {
 				if (alive) {
+					//std::cout << "looping " << std::endl;
 					std::size_t id;
 					s.receive(id);
 					connection conn{s,id};
-					while (true){
-						bool need_new_entry = false;
+					bool need_new_entry = false;
+					//std::cout << "received a message on connection " << id << std::endl;
+					for (bool i = true; i || need_new_entry; i = false){
 						while (need_new_entry){
+							//std::cout << "generating new entry" << std::endl;
 							need_new_entry = false;
 							std::unique_lock<std::shared_mutex> l{map_lock};
 							auto rcv = new_connection();
@@ -49,12 +57,17 @@ namespace mutils{
 							elem.next_expected_size = rcv.second;
 						}
 						{
+							//std::cout << "locking for receipt" << std::endl;
 							std::shared_lock<std::shared_mutex> l{map_lock};
 							if (receivers.count(id) > 0) {
+								//std::cout << "receiver ready, receiving message" << std::endl;
 								auto &p = receivers.at(id);
 								std::unique_lock<std::mutex> l{p.mut};
 								char msg[p.next_expected_size];
-								p.action(msg,conn);
+								s.receive(p.next_expected_size,msg);
+								//std::cout << "message received" << std::endl;
+								p.next_expected_size = p.action(msg,conn);
+								//std::cout << "action performed" << std::endl;
 								break;
 							}
 							else {
@@ -69,7 +82,6 @@ namespace mutils{
 		
 		receiver::~receiver(){
 			*acl.alive = false;
-			receiver_thread.join();
 		}
 	}
 }

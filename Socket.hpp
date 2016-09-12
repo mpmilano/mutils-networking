@@ -34,7 +34,10 @@ namespace mutils{
 		
 		bool valid() const;
 		
-		std::size_t receive(std::size_t how_much, void* where);
+		std::size_t receive(std::size_t how_many, std::size_t* sizes, void ** bufs);
+
+		using connection::receive;
+		using connection::send;
 
 		template<typename... T> auto receive(T&& ... t){
 			connection& _this = *this;
@@ -46,9 +49,8 @@ namespace mutils{
 			return _this.send(std::forward<T>(t)...);
 		}
 		
-		std::size_t send(std::size_t how_much, void const * what);
-
-		std::size_t peek(std::size_t how_much, void* where);
+		std::size_t send(std::size_t how_many, std::size_t* sizes, void const * const * const bufs);
+		std::size_t peek(std::size_t how_many, std::size_t* sizes, void ** bufs);
 		
 	};
 }

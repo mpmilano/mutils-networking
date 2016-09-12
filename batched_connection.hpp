@@ -28,6 +28,16 @@ namespace mutils{
 			std::size_t receive(std::size_t expected, void * parent_buf);
 			std::size_t send(std::size_t expected, void const * const buf);
 			bool valid () const {return sock.sock.valid();}
+			
+			template<typename... T> auto receive(T&& ... t){
+				::mutils::connection& _this = *this;
+				return _this.receive(std::forward<T>(t)...);
+			}
+			
+			template<typename... T> auto send(T&& ... t){
+				::mutils::connection& _this = *this;
+				return _this.send(std::forward<T>(t)...);
+			}
 		};
 		
 		using SocketPool = ResourcePool<connection>;
@@ -65,9 +75,10 @@ namespace mutils{
 			std::shared_mutex map_lock;
 			std::map<std::size_t,  action_items> receivers;
 			AcceptConnectionLoop acl;
-			std::thread receiver_thread;
 
 			void on_accept(bool& alive, Socket s);
+
+			void loop_until_false_set();
 
 			receiver(int port, decltype(new_connection) new_connection);
 			~receiver();

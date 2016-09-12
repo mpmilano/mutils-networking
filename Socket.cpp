@@ -1,10 +1,12 @@
 #include "Socket.hpp"
+#include "mutils.hpp"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
 #include <netdb.h>
 #include <thread>
+#include <netinet/tcp.h>
 								
 namespace mutils{
 
@@ -30,6 +32,12 @@ namespace mutils{
 		struct hostent *server;
 		
 		sockfd = socket(AF_INET, SOCK_STREAM, 0);
+		{ int optval = 1;
+			setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&optval,sizeof(int));
+		}
+		{ int optval = 1;
+			setsockopt(sockfd,IPPROTO_TCP,TCP_NODELAY,&optval,sizeof(int));
+		}
 		if (sockfd < 0){
 			std::cerr << ("ERROR opening socket") << std::endl;
 			throw SocketException{};
@@ -46,15 +54,32 @@ namespace mutils{
 		serv_addr.sin_port = htons(portno);
 		if (::connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0){
 			std::cerr << ("ERROR connecting");
+			std::cerr << "tried to connect to host " << string_of_ip(ip) << " on port " << portno << std::strerror(errno) << std::endl;
 			throw SocketException{};
 		}
 		complete = true;
 		return Socket{sockfd};
 	}
 
-	std::size_t Socket::receive(const std::size_t s, void* where){
-		assert(i);
-		int n = recv(i->sockID,where,s,MSG_WAITALL);
+	namespace {
+	std::size_t receive(int& sockID, std::size_t how_many, std::size_t* sizes, void ** bufs, bool peek){
+		iovec msgs[how_many];
+		std::size_t total_size = 0;
+		{
+			int i = 0;
+			for (auto& vec : msgs) {
+				vec.iov_base = bufs[i];
+				vec.iov_len = sizes[i];
+				++i;
+				total_size += sizes[i];
+			}
+		}
+		struct msghdr dst{
+			nullptr,0,
+				msgs,
+				how_many,
+				nullptr,0,0};
+		auto n = recvmsg(sockID,&dst,(peek ? MSG_PEEK : MSG_WAITALL));
 		if (n < 0) {
 			std::stringstream err;
 			err << "expected " << s << " bytes, received " << n << " accompanying error: " << std::strerror(errno);
@@ -63,26 +88,41 @@ namespace mutils{
 		else if (n == 0){
 			std::stringstream err;
 			err << "expected " << s << " bytes, received " << n << " before connection broken";
-			i->sockID = -1;
+			sockID = -1;
 			throw ProtocolException(err.str());
 		}
-		while (((std::size_t)n) < s) {
-			//std::cout << "WARNING: only got " << n << " bytes, expected " << s << " bytes" <<std::endl;
-			int k = recv(i->sockID,((char*) where) + n,s-n,MSG_WAITALL);
-			if (k <= 0) {
-				std::stringstream err;
-				err << "expected " << s << " bytes, received " << n << " accompanying error: " << std::strerror(errno);
-				if (k == 0) i->sockID = -1;
-				throw ProtocolException(err.str());
-			}
-			n += k;
+		else if (n < total_size){
+			std::cout << "WARNING: only got " << n << " bytes, expected " << s << " bytes" <<std::endl;
+			throw ProtocolException("MSG_WAITALL is supposed to do something here, right?");
 		}
 		return s;
 	}
+	}
 
-	std::size_t Socket::send(std::size_t amount, void const * what){
+	std::size_t Socket::receive(std::size_t how_many, std::size_t* sizes, void ** bufs){
+		return receive(i->sockID,how_many,sizes,bufs,false);
+	}
+
+	std::size_t Socket::send(std::size_t how_many, std::size_t* sizes, void const * const * const bufs){
+		iovec iovec_buf[how_many];
+		{
+			int i = 0;
+			for (auto& vec : iovec_buf){
+				vec.iov_base = bufs[i];
+				vec.iov_len = sizes[i];
+				++i;
+			}
+		}
+		struct msghdr payload{
+			nullptr,
+				0,
+				iovec_buf,
+				how_many,
+				nullptr,
+				0,
+				0};
 		if (valid()){
-			auto sent = ::send(i->sockID,what,amount,MSG_NOSIGNAL);
+			auto sent = ::sendmsg(i->sockID,&payload,MSG_NOSIGNAL);
 			bool complete = ((std::size_t)sent) == amount;
 			if (!complete) {
 				if (sent == -1 && errno == EPIPE) i->sockID = -1;
@@ -97,10 +137,7 @@ namespace mutils{
 		return amount;
 	}
 
-	std::size_t Socket::peek(std::size_t how_much, void* where){
-		auto ret = recv(i->sockID, where, how_much, MSG_PEEK);
-		assert(ret > 0);
-		assert((std::size_t)ret == how_much);
-		return ret;
+	std::size_t Socket::peek(std::size_t how_many, std::size_t* sizes, void ** bufs){
+		return receive(i->sockID,how_many,sizes,bufs,true);
 	}
 }

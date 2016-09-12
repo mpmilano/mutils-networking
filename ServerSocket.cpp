@@ -5,14 +5,21 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <thread>
+#include <netinet/tcp.h>
 
 namespace mutils{
 
 	ServerSocket::ServerSocket(int portno){
-		int sockfd;
+		int sockfd{0};
 		bool complete = false;
 		struct sockaddr_in serv_addr;
 		sockfd = socket(AF_INET, SOCK_STREAM, 0);
+		{ int optval = 1;
+			setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&optval,sizeof(int));
+		}
+		{ int optval = 1;
+			setsockopt(sockfd,IPPROTO_TCP,TCP_NODELAY,&optval,sizeof(int));
+		}
 		//linger lingerStruct{0,0};
 		//setsockopt(sockfd, SOL_SOCKET, SO_LINGER, (void *)&lingerStruct, sizeof(lingerStruct));
 		if (sockfd < 0){
