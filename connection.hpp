@@ -7,8 +7,8 @@ namespace mutils{
 //interface.
 struct connection{
 	virtual bool valid() const = 0;
-	std::size_t receive(std::size_t how_many, std::size_t* sizes, void ** bufs);
-	virtual std::size_t send(std::size_t how_many, std::size_t* sizes, void const * const * const) = 0;
+	virtual std::size_t receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs) = 0;
+	virtual std::size_t send(std::size_t how_many, std::size_t const * const sizes, void const * const * const) = 0;
 
 	
 	
@@ -69,7 +69,7 @@ struct connection{
 
 	template<typename T>
 	void* to_bytes_helper(const T &t, void* v){
-		to_bytes(t,v);
+		to_bytes(t,(char*)v);
 		return v;
 	}
 

@@ -61,36 +61,38 @@ namespace mutils{
 		connection::connection(SocketBundle &s, std::size_t id)
 			:sock(s),id(id){}
 
-		std::size_t connection::receive(std::size_t expected, void * _parent_buf){
-			char * parent_buf = (char*) _parent_buf;
+		std::size_t connection::receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
 			return [&](const auto &){
-				{
-					std::size_t buf;
-					sock.sock.receive(buf);
-					assert(buf == id);
-				}
-				bool worked = expected ==
-					sock.sock.receive(expected,parent_buf);
-				assert(worked);
-				return expected;
+				std::size_t id_buf;
+				std::size_t size_bufs[how_many + 1];
+				size_bufs[0] = sizeof(id_buf);
+				memcpy(size_bufs + 1,sizes,how_many * sizeof(std::size_t));
+				void* payload_bufs[how_many+1];
+				payload_bufs[0] = &id_buf;
+				memcpy(payload_bufs + 1,bufs,how_many * sizeof(void*));
+				return sock.sock.receive(how_many + 1, size_bufs,payload_bufs);
 			}(sock.cv.wait([&]{
 						std::size_t buf;
-						sock.sock.peek(sizeof(buf),&buf);
+						void* buf_p = &buf;
+						void** buf_pp = &buf_p;
+						static constexpr auto buf_size = sizeof(buf);
+						sock.sock.peek(1,&buf_size,buf_pp);
 						return buf == id;
 					}));
 		}
 		
-		std::size_t connection::send(std::size_t expected, void const * const _buf){
+		std::size_t connection::send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs){
 			//std::cout << "beginning send" << std::endl;
-			char const * const buf = (char*) _buf;
 			return [&](const auto &){
 				//std::cout << "lock acquired for send" << std::endl;
-				sock.sock.send(sizeof(id),&id);
-				bool worked = expected ==
-					sock.sock.send(expected,buf);
-				assert(worked);
-				//std::cout << "send complete" << std::endl;
-				return expected;
+				std::size_t size_bufs[how_many + 1];
+				size_bufs[0] = sizeof(id);
+				memcpy(size_bufs + 1,sizes,how_many * sizeof(std::size_t));
+				const void * payload_bufs[how_many + 1];
+				payload_bufs[0] = &id;
+				memcpy(payload_bufs + 1,bufs,how_many * sizeof(void*));
+
+				return sock.sock.send(how_many+1,size_bufs,payload_bufs);
 			}(sock.cv.wait([]{return true;}));
 		}
 

@@ -34,7 +34,7 @@ namespace mutils{
 		
 		bool valid() const;
 		
-		std::size_t receive(std::size_t how_many, std::size_t* sizes, void ** bufs);
+		std::size_t receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
 
 		using connection::receive;
 		using connection::send;
@@ -49,8 +49,8 @@ namespace mutils{
 			return _this.send(std::forward<T>(t)...);
 		}
 		
-		std::size_t send(std::size_t how_many, std::size_t* sizes, void const * const * const bufs);
-		std::size_t peek(std::size_t how_many, std::size_t* sizes, void ** bufs);
+		std::size_t send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs);
+		std::size_t peek(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
 		
 	};
 }
