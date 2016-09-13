@@ -59,18 +59,19 @@ namespace mutils{
 			struct connection;
 			const int port;
 			using action_t =
-				std::function<std::size_t (char*, ::mutils::connection&)>;
+				std::function<std::vector<std::size_t> (void**, ::mutils::connection&)>;
 			
 			struct action_items{
 				action_t action;
-				std::size_t next_expected_size;
+				std::vector<std::size_t> next_expected_size;
 				std::mutex mut;
 				action_items() = default;
 				action_items(std::pair<action_t, std::size_t> a)
 					:action(a.first),next_expected_size(a.second){}
 				action_items(action_items&&) = default;
 			};
-			std::function<std::pair<action_t, std::size_t> ()> new_connection;
+			std::function<std::pair<action_t,
+									std::vector<std::size_t> > ()> new_connection;
 
 			std::shared_mutex map_lock;
 			std::map<std::size_t,  action_items> receivers;

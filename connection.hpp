@@ -67,18 +67,23 @@ struct connection{
 		return std::get<0>(receive_helper<T>(dsm,recv));
 	}
 
-	template<typename T>
-	void* to_bytes_helper(const T &t, void* v){
-		to_bytes(t,(char*)v);
-		return v;
+	void to_bytes_helper(void**, void*, int, int){}
+	
+	template<typename T1, typename... T2>
+	void to_bytes_helper(void** bufs, char* v, int offset, int index, const T1 &t, const T2&... t2){
+		to_bytes(t,(v + offset));
+		bufs[index] = v + offset;
+		to_bytes_helper(bufs,v,offset+bytes_size(t),index + 1, t2...);
 	}
 
 	template<typename... T>
 	void send(const T&... t){
-		void *bufs[] = {to_bytes_helper(t,alloca(bytes_size(t)))...};
 		std::size_t sizes[] = {bytes_size(t)...};
-		
-		
+		std::size_t total_size = 0;
+		for (auto &size : sizes) total_size += size;
+		char* memory_chunk = (char*) alloca(total_size);
+		void *bufs[sizeof...(T)];
+		to_bytes_helper(bufs,memory_chunk,0,0,t...);
 		static_assert(forall((std::is_pod<T>::value || std::is_base_of<ByteRepresentable, T>::value)...),
 			"Error: cannot serialize these types.");
 		send(sizeof...(T),sizes,bufs);

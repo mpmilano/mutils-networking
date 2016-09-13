@@ -62,7 +62,7 @@ namespace mutils{
 	}
 
 	namespace {
-	std::size_t receive(int& sockID, std::size_t how_many, std::size_t* sizes, void ** bufs, bool peek){
+	std::size_t receive_helper_socket_cpp(int& sockID, std::size_t how_many, std::size_t const * const sizes, void ** bufs, bool peek){
 		iovec msgs[how_many];
 		std::size_t total_size = 0;
 		{
@@ -82,35 +82,36 @@ namespace mutils{
 		auto n = recvmsg(sockID,&dst,(peek ? MSG_PEEK : MSG_WAITALL));
 		if (n < 0) {
 			std::stringstream err;
-			err << "expected " << s << " bytes, received " << n << " accompanying error: " << std::strerror(errno);
+			err << "error: " << std::strerror(errno);
 			throw ProtocolException(err.str());
 		}
 		else if (n == 0){
 			std::stringstream err;
-			err << "expected " << s << " bytes, received " << n << " before connection broken";
+			err << "connection broken";
 			sockID = -1;
 			throw ProtocolException(err.str());
 		}
-		else if (n < total_size){
-			std::cout << "WARNING: only got " << n << " bytes, expected " << s << " bytes" <<std::endl;
+		else if (n < (int) total_size){
 			throw ProtocolException("MSG_WAITALL is supposed to do something here, right?");
 		}
-		return s;
+		return total_size;
 	}
 	}
 
-	std::size_t Socket::receive(std::size_t how_many, std::size_t* sizes, void ** bufs){
-		return receive(i->sockID,how_many,sizes,bufs,false);
+	std::size_t Socket::receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
+		return receive_helper_socket_cpp(i->sockID,how_many,sizes,bufs,false);
 	}
 
-	std::size_t Socket::send(std::size_t how_many, std::size_t* sizes, void const * const * const bufs){
+	std::size_t Socket::send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs){
 		iovec iovec_buf[how_many];
+		std::size_t total_size{0};
 		{
 			int i = 0;
 			for (auto& vec : iovec_buf){
-				vec.iov_base = bufs[i];
+				vec.iov_base = const_cast<void*>(bufs[i]);
 				vec.iov_len = sizes[i];
 				++i;
+				total_size += vec.iov_len;
 			}
 		}
 		struct msghdr payload{
@@ -123,21 +124,21 @@ namespace mutils{
 				0};
 		if (valid()){
 			auto sent = ::sendmsg(i->sockID,&payload,MSG_NOSIGNAL);
-			bool complete = ((std::size_t)sent) == amount;
+			bool complete = sent == (long) total_size;
 			if (!complete) {
 				if (sent == -1 && errno == EPIPE) i->sockID = -1;
 				else if (sent == -1){
 					std::stringstream err;
-					err << "tried sending " << amount << " bytes, achieved " << sent << " accompanying error: " << std::strerror(errno);
+					err << "tried sending " << total_size << " bytes, achieved " << sent << " accompanying error: " << std::strerror(errno);
 					throw ProtocolException(err.str());
 				}
 			}
 		}
 		else throw ProtocolException("attempt to send on broken connection!");
-		return amount;
+		return total_size;
 	}
 
-	std::size_t Socket::peek(std::size_t how_many, std::size_t* sizes, void ** bufs){
-		return receive(i->sockID,how_many,sizes,bufs,true);
+	std::size_t Socket::peek(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
+		return receive_helper_socket_cpp(i->sockID,how_many,sizes,bufs,true);
 	}
 }

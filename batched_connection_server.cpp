@@ -1,6 +1,7 @@
 #include "Socket.hpp"
 #include "resource_pool.hpp"
 #include "batched_connection.hpp"
+#include "batched_connection_common.hpp"
 #include <mutex>
 
 namespace mutils{
@@ -10,16 +11,11 @@ namespace mutils{
 			Socket s;
 			const std::size_t id;
 			connection(Socket s, size_t id):s(s),id(id){}
-			std::size_t send(std::size_t expected,
-							 void const * const buf){
-				auto size1 = s.send(sizeof(id),&id);
-				assert(size1 == sizeof(id));
-				auto size2 = s.send(expected,buf);
-				assert(size2 == expected);
-				return expected;
+			std::size_t send(std::size_t how_many, std::size_t const * const sizes, void const * const * const buf){
+				return send_with_id(s,id,how_many,sizes,buf);
 			}
 			bool valid() const {return true;}
-			std::size_t receive(std::size_t, void*) {assert(false);}
+			std::size_t receive(std::size_t, std::size_t const * const, void **) {assert(false);}
 			connection(const connection&) = delete;
 		};
 
@@ -63,10 +59,15 @@ namespace mutils{
 								//std::cout << "receiver ready, receiving message" << std::endl;
 								auto &p = receivers.at(id);
 								std::unique_lock<std::mutex> l{p.mut};
-								char msg[p.next_expected_size];
-								s.receive(p.next_expected_size,msg);
+								void* bufs[p.next_expected_size.size()];
+								for (std::size_t i = 0; i < p.next_expected_size.size(); ++i){
+									bufs[i] = alloca(p.next_expected_size.at(i));
+								}
+								s.receive(p.next_expected_size.size(),
+										  p.next_expected_size.data(),
+										  bufs);
 								//std::cout << "message received" << std::endl;
-								p.next_expected_size = p.action(msg,conn);
+								p.next_expected_size = p.action(bufs,conn);
 								//std::cout << "action performed" << std::endl;
 								break;
 							}

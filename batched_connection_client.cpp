@@ -1,6 +1,7 @@
 #include "Socket.hpp"
 #include "resource_pool.hpp"
 #include "batched_connection.hpp"
+#include "batched_connection_common.hpp"
 #include <mutex>
 
 using namespace std;
@@ -63,14 +64,7 @@ namespace mutils{
 
 		std::size_t connection::receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
 			return [&](const auto &){
-				std::size_t id_buf;
-				std::size_t size_bufs[how_many + 1];
-				size_bufs[0] = sizeof(id_buf);
-				memcpy(size_bufs + 1,sizes,how_many * sizeof(std::size_t));
-				void* payload_bufs[how_many+1];
-				payload_bufs[0] = &id_buf;
-				memcpy(payload_bufs + 1,bufs,how_many * sizeof(void*));
-				return sock.sock.receive(how_many + 1, size_bufs,payload_bufs);
+				return receive_with_id(sock.sock,id,how_many,sizes,bufs);
 			}(sock.cv.wait([&]{
 						std::size_t buf;
 						void* buf_p = &buf;
@@ -84,15 +78,7 @@ namespace mutils{
 		std::size_t connection::send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs){
 			//std::cout << "beginning send" << std::endl;
 			return [&](const auto &){
-				//std::cout << "lock acquired for send" << std::endl;
-				std::size_t size_bufs[how_many + 1];
-				size_bufs[0] = sizeof(id);
-				memcpy(size_bufs + 1,sizes,how_many * sizeof(std::size_t));
-				const void * payload_bufs[how_many + 1];
-				payload_bufs[0] = &id;
-				memcpy(payload_bufs + 1,bufs,how_many * sizeof(void*));
-
-				return sock.sock.send(how_many+1,size_bufs,payload_bufs);
+				return send_with_id(sock.sock,id,how_many,sizes,bufs);
 			}(sock.cv.wait([]{return true;}));
 		}
 
