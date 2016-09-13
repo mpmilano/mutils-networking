@@ -7,8 +7,8 @@ namespace mutils{
 //interface.
 struct connection{
 	virtual bool valid() const = 0;
-	virtual std::size_t receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs) = 0;
-	virtual std::size_t send(std::size_t how_many, std::size_t const * const sizes, void const * const * const) = 0;
+	virtual std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs) = 0;
+	virtual std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const) = 0;
 
 	
 	
@@ -18,7 +18,7 @@ struct connection{
 					  "Error: can't do non-POD right now");
 		void* recv[] = {&t...};
 		std::size_t size_buf[] = {sizeof(T)...};
-		receive(sizeof...(T),size_buf,recv);
+		raw_receive(sizeof...(T),size_buf,recv);
 	}
 
 	template<typename... T>
@@ -55,7 +55,7 @@ struct connection{
 		
 		void* recv[] = {alloca(size),alloca(sizes)...};
 		std::size_t size_buf[] = {size,sizes...};
-		receive(sizeof...(T2) + 1 ,size_buf,recv);
+		raw_receive(sizeof...(T2) + 1 ,size_buf,recv);
 		return receive_helper<T1,T2...>(dsm,recv);
 	}
 	template<typename T>
@@ -63,30 +63,23 @@ struct connection{
 		void* recv[] = {alloca(size)};
 		void** _recv = recv;
 		std::size_t size_buf[] = {size};
-		receive(1 ,size_buf,_recv);
+		raw_receive(1 ,size_buf,_recv);
 		return std::get<0>(receive_helper<T>(dsm,recv));
 	}
 
-	void to_bytes_helper(void**, void*, int, int){}
-	
-	template<typename T1, typename... T2>
-	void to_bytes_helper(void** bufs, char* v, int offset, int index, const T1 &t, const T2&... t2){
-		to_bytes(t,(v + offset));
-		bufs[index] = v + offset;
-		to_bytes_helper(bufs,v,offset+bytes_size(t),index + 1, t2...);
+	template<typename T>
+	void* to_bytes_helper(const T &t, void* v){
+		to_bytes(t,(char*)v);
+		return v;
 	}
 
 	template<typename... T>
 	void send(const T&... t){
 		std::size_t sizes[] = {bytes_size(t)...};
-		std::size_t total_size = 0;
-		for (auto &size : sizes) total_size += size;
-		char* memory_chunk = (char*) alloca(total_size);
-		void *bufs[sizeof...(T)];
-		to_bytes_helper(bufs,memory_chunk,0,0,t...);
+		void *bufs[] = {to_bytes_helper(t,alloca(bytes_size(t)))...};
 		static_assert(forall((std::is_pod<T>::value || std::is_base_of<ByteRepresentable, T>::value)...),
 			"Error: cannot serialize these types.");
-		send(sizeof...(T),sizes,bufs);
+		raw_send(sizeof...(T),sizes,bufs);
 	}
 	
 };

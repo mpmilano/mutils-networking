@@ -98,11 +98,11 @@ namespace mutils{
 	}
 	}
 
-	std::size_t Socket::receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
+	std::size_t Socket::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
 		return receive_helper_socket_cpp(i->sockID,how_many,sizes,bufs,false);
 	}
 
-	std::size_t Socket::send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs){
+	std::size_t Socket::raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs){
 		iovec iovec_buf[how_many];
 		std::size_t total_size{0};
 		{

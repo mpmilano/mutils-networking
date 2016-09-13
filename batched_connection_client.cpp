@@ -62,7 +62,7 @@ namespace mutils{
 		connection::connection(SocketBundle &s, std::size_t id)
 			:sock(s),id(id){}
 
-		std::size_t connection::receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
+		std::size_t connection::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
 			return [&](const auto &){
 				return receive_with_id(sock.sock,id,how_many,sizes,bufs);
 			}(sock.cv.wait([&]{
@@ -75,7 +75,7 @@ namespace mutils{
 					}));
 		}
 		
-		std::size_t connection::send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs){
+		std::size_t connection::raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs){
 			//std::cout << "beginning send" << std::endl;
 			return [&](const auto &){
 				return send_with_id(sock.sock,id,how_many,sizes,bufs);

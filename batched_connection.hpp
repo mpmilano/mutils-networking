@@ -25,8 +25,8 @@ namespace mutils{
 			operator bool() const {return valid();}
 			connection(const connection&) = delete;
 			connection(connection&&) = default;
-			std::size_t receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
-			std::size_t send(std::size_t how_many, std::size_t const * const sizes, void const * const * const);
+			std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
+			std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const);
 			bool valid () const {return sock.sock.valid();}
 			
 			template<typename... T> auto receive(T&& ... t){

@@ -11,11 +11,11 @@ namespace mutils{
 			Socket s;
 			const std::size_t id;
 			connection(Socket s, size_t id):s(s),id(id){}
-			std::size_t send(std::size_t how_many, std::size_t const * const sizes, void const * const * const buf){
+			std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const buf){
 				return send_with_id(s,id,how_many,sizes,buf);
 			}
 			bool valid() const {return true;}
-			std::size_t receive(std::size_t, std::size_t const * const, void **) {assert(false);}
+			std::size_t raw_receive(std::size_t, std::size_t const * const, void **) {assert(false);}
 			connection(const connection&) = delete;
 		};
 
@@ -63,7 +63,7 @@ namespace mutils{
 								for (std::size_t i = 0; i < p.next_expected_size.size(); ++i){
 									bufs[i] = alloca(p.next_expected_size.at(i));
 								}
-								s.receive(p.next_expected_size.size(),
+								s.raw_receive(p.next_expected_size.size(),
 										  p.next_expected_size.data(),
 										  bufs);
 								//std::cout << "message received" << std::endl;
