@@ -16,8 +16,10 @@ struct connection{
 	void receive(T&... t){
 		static_assert(forall(std::is_pod<T>::value...),
 					  "Error: can't do non-POD right now");
+		/*std::cout << "yup you called this one" << std::endl; //*/
 		void* recv[] = {&t...};
 		std::size_t size_buf[] = {sizeof(T)...};
+		/*std::cout << "first element in size buf is: " << size_buf[0] << std::endl; //*/
 		raw_receive(sizeof...(T),size_buf,recv);
 	}
 

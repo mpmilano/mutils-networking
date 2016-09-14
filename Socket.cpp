@@ -39,7 +39,7 @@ namespace mutils{
 			setsockopt(sockfd,IPPROTO_TCP,TCP_NODELAY,&optval,sizeof(int));
 		}
 		if (sockfd < 0){
-			std::cerr << ("ERROR opening socket") << std::endl;
+			std::cerr << ("ERROR opening socket") << std::endl; //*/
 			throw SocketException{};
 		}
 		bool complete = false;
@@ -54,7 +54,7 @@ namespace mutils{
 		serv_addr.sin_port = htons(portno);
 		if (::connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0){
 			std::cerr << ("ERROR connecting");
-			std::cerr << "tried to connect to host " << string_of_ip(ip) << " on port " << portno << std::strerror(errno) << std::endl;
+			std::cerr << "tried to connect to host " << string_of_ip(ip) << " on port " << portno << std::strerror(errno) << std::endl; //*/
 			throw SocketException{};
 		}
 		complete = true;
@@ -63,6 +63,7 @@ namespace mutils{
 
 	namespace {
 	std::size_t receive_helper_socket_cpp(int& sockID, std::size_t how_many, std::size_t const * const sizes, void ** bufs, bool peek){
+		/*std::cout << "receiving " << how_many << " payloads" << std::endl; //*/
 		iovec msgs[how_many];
 		std::size_t total_size = 0;
 		{
@@ -70,16 +71,18 @@ namespace mutils{
 			for (auto& vec : msgs) {
 				vec.iov_base = bufs[i];
 				vec.iov_len = sizes[i];
-				++i;
 				total_size += sizes[i];
+				++i;
 			}
 		}
+		/*std::cout << "we think this should be " << total_size << " bytes" << std::endl; //*/
 		struct msghdr dst{
 			nullptr,0,
 				msgs,
 				how_many,
 				nullptr,0,0};
 		auto n = recvmsg(sockID,&dst,(peek ? MSG_PEEK : MSG_WAITALL));
+		/*std::cout << "we actually received " << n << " bytes" << std::endl; //*/
 		if (n < 0) {
 			std::stringstream err;
 			err << "error: " << std::strerror(errno);
@@ -103,6 +106,7 @@ namespace mutils{
 	}
 
 	std::size_t Socket::raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs){
+		/*std::cout << "sending " << how_many << "payloads" << std::endl; //*/
 		iovec iovec_buf[how_many];
 		std::size_t total_size{0};
 		{
@@ -110,10 +114,11 @@ namespace mutils{
 			for (auto& vec : iovec_buf){
 				vec.iov_base = const_cast<void*>(bufs[i]);
 				vec.iov_len = sizes[i];
-				++i;
 				total_size += vec.iov_len;
+				++i;
 			}
 		}
+		/*std::cout << "we think this should be " << total_size << " bytes" << std::endl; //*/
 		struct msghdr payload{
 			nullptr,
 				0,
@@ -124,6 +129,7 @@ namespace mutils{
 				0};
 		if (valid()){
 			auto sent = ::sendmsg(i->sockID,&payload,MSG_NOSIGNAL);
+			/*std::cout << "sent " << sent << " bytes in total" << std::endl; //*/
 			bool complete = sent == (long) total_size;
 			if (!complete) {
 				if (sent == -1 && errno == EPIPE) i->sockID = -1;

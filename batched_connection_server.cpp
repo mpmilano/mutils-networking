@@ -58,6 +58,10 @@ namespace mutils{
 							if (receivers.count(id) > 0) {
 								//std::cout << "receiver ready, receiving message" << std::endl;
 								auto &p = receivers.at(id);
+								//std::cout << " message sizes: ";
+								//for (auto &s : p.next_expected_size)
+									//std::cout << s << " ";
+								//std::cout << std::endl;
 								std::unique_lock<std::mutex> l{p.mut};
 								void* bufs[p.next_expected_size.size()];
 								for (std::size_t i = 0; i < p.next_expected_size.size(); ++i){

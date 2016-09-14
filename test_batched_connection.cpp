@@ -6,17 +6,39 @@ using namespace mutils;
 using namespace std;
 
 int main(int, char* argv[]){
+
+	{
+		constexpr int port = 9845;
+		int recv_port{0};
+		ServerSocket ss{port};
+		std::thread t{[&]{
+				auto s = ss.receive();
+				s.receive(recv_port);
+				assert(recv_port == port);
+				int recv{0};
+				s.receive(recv);
+				assert(recv == recv_port);
+				recv = 0;
+				s.receive(recv);
+				assert(recv == recv_port);
+			}};
+		Socket s = Socket::connect(decode_ip("127.0.0.1"),port);
+		s.send(port);
+		s.send(port,port);
+		t.join();
+	}
+	
 	const auto portno = std::atoi(argv[1]);
 	std::cout << "portno is: " << portno << std::endl;
 	using action_t = typename batched_connection::receiver::action_t;
 	std::thread receiver{[&]{
 			batched_connection::receiver{portno,[]{
 					return std::pair<action_t,std::vector<std::size_t> >{
-						[](void** inbnd, connection& c){
+						[](void** inbnd, connection& c) -> std::vector<std::size_t>{
 							int rcv = *((int*)(inbnd[0]));
 							c.send(rcv);
-							return std::vector<std::size_t>{1,sizeof(int)};
-						}, std::vector<std::size_t>{1,sizeof(int)}};
+							return {sizeof(int)};
+						}, {sizeof(int)}};
 				}}.loop_until_false_set();
 		}};
 	sleep(1);
