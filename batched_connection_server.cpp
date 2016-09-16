@@ -38,7 +38,9 @@ namespace mutils{
 				if (alive) {
 					//std::cout << "looping " << std::endl;
 					std::size_t id;
+					std::size_t size;
 					s.receive(id);
+					s.receive(size);
 					connection conn{s,id};
 					bool need_new_entry = false;
 					//std::cout << "received a message on connection " << id << std::endl;

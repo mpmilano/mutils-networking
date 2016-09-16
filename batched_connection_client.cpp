@@ -8,7 +8,7 @@ using namespace std;
 
 namespace mutils{
 	namespace batched_connection {
-		
+
 	struct batched_connections_impl {
 		static const constexpr std::size_t connection_factor = 8;
 		const int ip;
@@ -21,8 +21,10 @@ namespace mutils{
 		std::atomic<std::size_t> current_connections{0};
 		SocketPool rp;
 		std::vector<std::unique_ptr<SocketBundle> > bundles{modulous};
+		bool init_done{false};
 		
 		connection* new_resource(){
+			assert(!init_done);
 			const std::size_t id = current_connections;
 			auto index = id % (modulous);
 			assert(index < bundles.size());
@@ -53,6 +55,7 @@ namespace mutils{
 				}
 			};
 			init_all(this->rp.acquire(),0);
+			bool init_done = true;
 			//std::cout << "pre-init done" << std::endl;
 		}
 	};
@@ -60,26 +63,80 @@ namespace mutils{
 
 
 		connection::connection(SocketBundle &s, std::size_t id)
-			:sock(s),id(id){}
+			:sock(s),id(id),my_queue(s.incoming[id]){}
+
+		void connection::process_data (std::unique_lock<std::mutex> sock_lock, buf_ptr _payload, std::size_t payload_size)
+		{
+			auto* payload = &_payload;
+			
+			if (payload_size < hdr_size){
+				assert(!sock.orphans);
+				sock.orphans = std::unique_ptr<buf_ptr>{new buf_ptr(std::move(*payload))};
+			}
+			else {
+				const std::size_t &id = ((std::size_t*)payload->payload)[0];
+				const std::size_t &size = ((std::size_t*)payload->payload)[1];
+				if (payload_size < size + hdr_size){
+					assert(!sock.orphans);
+					sock.orphans = std::unique_ptr<buf_ptr>{new buf_ptr(std::move(*payload))};
+					sock.orphan_size = payload_size;
+				}
+				else {
+					{
+						//payload is at least a full message; queue up that message and keep going.
+						auto &queue = sock.incoming.at(id);
+						std::unique_lock<std::shared_mutex> l{queue.queue_lock};
+						queue.queue.emplace_back(payload->split(hdr_size));
+						payload = &queue.queue.back();
+					}
+					if (payload_size > size){
+						process_data(std::move(sock_lock), payload->split(size),
+									 payload_size - size - hdr_size);
+					}
+					else {
+						sock.spare = payload->split(size);
+					}
+				}
+			}
+		}
+
+		void connection::from_network (std::unique_lock<std::mutex> l,
+										  std::size_t expected_size, buf_ptr from)
+		{
+			auto into = from.grow_to_fit(expected_size + hdr_size);
+			std::size_t size_bufs[] = {into.size()};
+			void* payload_bufs[] = {into.payload};
+			auto recv_size = sock.sock.raw_receive(1,size_bufs,payload_bufs);
+			process_data(std::move(l),std::move(into),recv_size);
+		};
 
 		std::size_t connection::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
-			return [&](const auto &){
-				return receive_with_id(sock.sock,id,how_many,sizes,bufs);
-			}(sock.cv.wait([&]{
-						std::size_t buf;
-						void* buf_p = &buf;
-						void** buf_pp = &buf_p;
-						static constexpr auto buf_size = sizeof(buf);
-						sock.sock.peek(1,&buf_size,buf_pp);
-						return buf == id;
-					}));
+			const auto expected_size = total_size(how_many, sizes);
+			if (my_queue.queue.size() > 0){
+				std::shared_lock<std::shared_mutex> l{my_queue.queue_lock};
+				auto msg = my_queue.queue.front();
+				my_queue.queue.pop_front();
+				assert(msg.size() == expected_size);
+				copy_into(how_many,sizes,bufs,msg.msg.payload);
+				return expected_size;
+			}
+			else {
+				std::unique_lock<std::mutex> l{sock.socket_lock};
+				auto leftover = std::move(sock.orphans);
+				const auto real_expected = expected_size + hdr_size;
+				const auto remaining_size = (sock.orphan_size >= real_expected ?
+									   sock.orphan_size :
+									   real_expected - sock.orphan_size);
+				
+				sock.orphan_size = 0;
+				from_network(std::move(l),remaining_size,(leftover ? *leftover : sock.spare));
+			}
+			//try again to find our message
+			return raw_receive(how_many,sizes,bufs);
 		}
 		
 		std::size_t connection::raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs){
-			//std::cout << "beginning send" << std::endl;
-			return [&](const auto &){
-				return send_with_id(sock.sock,id,how_many,sizes,bufs);
-			}(sock.cv.wait([]{return true;}));
+			return send_with_id(sock.sock,id,how_many,sizes,bufs,total_size(how_many, sizes));
 		}
 
 		struct batched_connections::Internals{

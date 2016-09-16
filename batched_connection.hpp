@@ -9,10 +9,24 @@ namespace mutils{
 	namespace batched_connection {
 
 		struct batched_connections_impl;
-
+		using BufGen = BufferGenerator<4096>;
+		using buf_ptr = struct BufGen::pointer;
+		static const constexpr std::size_t hdr_size = 2*sizeof(std::size_t);
+		
+		struct incoming_message_queue{
+			std::list<buf_ptr> queue;
+			std::shared_mutex queue_lock;
+		};
+		
 		struct SocketBundle{
 			Socket sock;
-			condition_variable cv;
+			std::map<std::size_t,incoming_message_queue> incoming;
+			std::mutex socket_lock;
+
+			std::unique_ptr<buf_ptr> orphans;
+			std::size_t orphan_size{0};
+			buf_ptr spare{BufGen::allocate()};
+			
 			SocketBundle(Socket sock):sock(sock){}
 			SocketBundle(const SocketBundle&) = delete;
 			SocketBundle(SocketBundle&&) = delete;
@@ -21,10 +35,16 @@ namespace mutils{
 		struct connection : public ::mutils::connection {
 			SocketBundle& sock;
 			const std::size_t id;
+			incoming_message_queue& my_queue;
+			//use this if there's nothing left over.
 			connection(SocketBundle& s, std::size_t id);
 			operator bool() const {return valid();}
 			connection(const connection&) = delete;
 			connection(connection&&) = default;
+		private:
+			buf_ptr process_data(std::size_t id, std::size_t size, buf_ptr _payload, std::size_t payload_size);
+			buf_ptr from_network (buf_ptr into);
+		public:
 			std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
 			std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const);
 			bool valid () const {return sock.sock.valid();}
