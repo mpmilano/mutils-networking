@@ -55,7 +55,7 @@ namespace mutils{
 				}
 			};
 			init_all(this->rp.acquire(),0);
-			bool init_done = true;
+			init_done = true;
 			//std::cout << "pre-init done" << std::endl;
 		}
 	};
@@ -114,10 +114,10 @@ namespace mutils{
 			const auto expected_size = total_size(how_many, sizes);
 			if (my_queue.queue.size() > 0){
 				std::shared_lock<std::shared_mutex> l{my_queue.queue_lock};
-				auto msg = my_queue.queue.front();
+				auto msg = std::move(my_queue.queue.front());
 				my_queue.queue.pop_front();
 				assert(msg.size() == expected_size);
-				copy_into(how_many,sizes,bufs,msg.msg.payload);
+				copy_into(how_many,sizes,bufs,(char*)msg.payload);
 				return expected_size;
 			}
 			else {
@@ -129,7 +129,7 @@ namespace mutils{
 									   real_expected - sock.orphan_size);
 				
 				sock.orphan_size = 0;
-				from_network(std::move(l),remaining_size,(leftover ? *leftover : sock.spare));
+				from_network(std::move(l),remaining_size,std::move(leftover ? *leftover : sock.spare));
 			}
 			//try again to find our message
 			return raw_receive(how_many,sizes,bufs);

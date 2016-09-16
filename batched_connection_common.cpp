@@ -15,4 +15,11 @@ namespace mutils{
 		
 		return sock.raw_send(how_many+2,size_bufs,payload_bufs);
 	}
+	
+	void copy_into(std::size_t how_many,std::size_t const * const sizes,void ** bufs, char* src){
+		for (std::size_t i = 0; i < how_many; ++i){
+			memcpy(bufs[i],src,sizes[i]);
+			src += sizes[i];
+		}
+	}
 }

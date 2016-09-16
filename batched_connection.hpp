@@ -4,6 +4,7 @@
 #include "better_cv.hpp"
 #include <shared_mutex>
 #include "ServerSocket.hpp"
+#include "buffer_generator.hpp"
 
 namespace mutils{
 	namespace batched_connection {
@@ -42,8 +43,9 @@ namespace mutils{
 			connection(const connection&) = delete;
 			connection(connection&&) = default;
 		private:
-			buf_ptr process_data(std::size_t id, std::size_t size, buf_ptr _payload, std::size_t payload_size);
-			buf_ptr from_network (buf_ptr into);
+			void process_data (std::unique_lock<std::mutex> sock_lock, buf_ptr _payload, std::size_t payload_size);
+			void from_network (std::unique_lock<std::mutex> l,
+							   std::size_t expected_size, buf_ptr from);
 		public:
 			std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
 			std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const);

@@ -12,7 +12,7 @@ namespace mutils{
 			const std::size_t id;
 			connection(Socket s, size_t id):s(s),id(id){}
 			std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const buf){
-				return send_with_id(s,id,how_many,sizes,buf);
+				return send_with_id(s,id,how_many,sizes,buf,total_size(how_many,sizes));
 			}
 			bool valid() const {return true;}
 			std::size_t raw_receive(std::size_t, std::size_t const * const, void **) {assert(false);}
