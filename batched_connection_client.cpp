@@ -117,13 +117,9 @@ namespace mutils{
 			auto recv_size = sock.sock.drain(into.size() - offset,
 											 into.payload + offset);
 			process_data(std::move(l),std::move(into),recv_size + offset);
-			assert(sock.spare.payload || sock.orphans);
 		};
 
 		std::size_t connection::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
-			//remove when on >2 case
-			assert(sock.spare.size() >= sizeof(int));
-			assert(sock.spare.payload || sock.orphans);
 			const auto expected_size = total_size(how_many, sizes);
 			while (true){
 				if (my_queue.queue.size() > 0){
@@ -136,6 +132,7 @@ namespace mutils{
 				}
 				else {
 					std::unique_lock<std::mutex> l{sock.socket_lock};
+					assert(sock.spare.payload || sock.orphans);
 					const auto real_expected = expected_size + hdr_size;
 					if (sock.orphans){
 						auto orphan = std::move(sock.orphans); //nulls sock.orphans

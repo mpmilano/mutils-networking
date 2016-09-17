@@ -65,8 +65,10 @@ int main(int argc, char* argv[]){
 						int receipt{-1};
 						c->receive(receipt);
 						assert(receipt == my_msg);
-						if (receipt != my_msg)
+						if (receipt != my_msg){
+							assert(false);
 							throw debug_info{my_msg,receipt};
+						}
 						
 					}
 				});
