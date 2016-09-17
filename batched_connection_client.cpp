@@ -68,18 +68,26 @@ namespace mutils{
 		void connection::process_data (std::unique_lock<std::mutex> sock_lock, buf_ptr _payload, std::size_t payload_size)
 		{
 			auto* payload = &_payload;
-			
+
+			using orphan_t = typename SocketBundle::orphan_t;
+
 			if (payload_size < hdr_size){
 				assert(!sock.orphans);
-				sock.orphans = std::unique_ptr<buf_ptr>{new buf_ptr(std::move(*payload))};
+				assert(payload_size > 0);
+				sock.orphans =
+					std::unique_ptr<orphan_t>
+					{new orphan_t(std::move(*payload),payload_size)};
 			}
 			else {
 				const std::size_t &id = ((std::size_t*)payload->payload)[0];
 				const std::size_t &size = ((std::size_t*)payload->payload)[1];
 				if (payload_size < size + hdr_size){
+					std::cout << payload_size << std::endl;
 					assert(!sock.orphans);
-					sock.orphans = std::unique_ptr<buf_ptr>{new buf_ptr(std::move(*payload))};
-					sock.orphan_size = payload_size;
+					sock.orphans =
+						std::unique_ptr<orphan_t>
+						{new orphan_t(std::move(*payload),payload_size)};
+					assert(payload_size > 0);
 				}
 				else {
 					{
@@ -89,7 +97,7 @@ namespace mutils{
 						queue.queue.emplace_back(payload->split(hdr_size));
 						payload = &queue.queue.back();
 					}
-					if (payload_size > size){
+					if (payload_size > (size + hdr_size)){
 						process_data(std::move(sock_lock), payload->split(size),
 									 payload_size - size - hdr_size);
 					}
@@ -101,38 +109,51 @@ namespace mutils{
 		}
 
 		void connection::from_network (std::unique_lock<std::mutex> l,
-										  std::size_t expected_size, buf_ptr from)
+									   std::size_t expected_size, buf_ptr from,
+									   std::size_t offset)
 		{
-			auto into = from.grow_to_fit(expected_size + hdr_size);
-			std::size_t size_bufs[] = {into.size()};
-			void* payload_bufs[] = {into.payload};
-			auto recv_size = sock.sock.raw_receive(1,size_bufs,payload_bufs);
-			process_data(std::move(l),std::move(into),recv_size);
+			auto into = from.grow_to_fit(expected_size + offset);
+                        assert(into.size() > offset);
+			auto recv_size = sock.sock.drain(into.size() - offset,
+											 into.payload + offset);
+			process_data(std::move(l),std::move(into),recv_size + offset);
+			assert(sock.spare.payload || sock.orphans);
 		};
 
 		std::size_t connection::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
+			//remove when on >2 case
+			assert(sock.spare.size() >= sizeof(int));
+			assert(sock.spare.payload || sock.orphans);
 			const auto expected_size = total_size(how_many, sizes);
-			if (my_queue.queue.size() > 0){
-				std::shared_lock<std::shared_mutex> l{my_queue.queue_lock};
-				auto msg = std::move(my_queue.queue.front());
-				my_queue.queue.pop_front();
-				assert(msg.size() == expected_size);
-				copy_into(how_many,sizes,bufs,(char*)msg.payload);
-				return expected_size;
+			while (true){
+				if (my_queue.queue.size() > 0){
+					std::shared_lock<std::shared_mutex> l{my_queue.queue_lock};
+					auto msg = std::move(my_queue.queue.front());
+					my_queue.queue.pop_front();
+					assert(msg.size() == expected_size);
+					copy_into(how_many,sizes,bufs,(char*)msg.payload);
+					return expected_size;
+				}
+				else {
+					std::unique_lock<std::mutex> l{sock.socket_lock};
+					const auto real_expected = expected_size + hdr_size;
+					if (sock.orphans){
+						auto orphan = std::move(sock.orphans); //nulls sock.orphans
+						const auto remaining_size = (orphan->size >= real_expected ?
+													 orphan->size :
+													 real_expected - orphan->size);
+						from_network(std::move(l),
+									 remaining_size,
+									 std::move(orphan->buf),orphan->size);
+					}
+					else {
+						assert(sock.spare.payload);
+						from_network(std::move(l),
+									 real_expected,
+									 std::move(sock.spare),0);
+					}
+				}
 			}
-			else {
-				std::unique_lock<std::mutex> l{sock.socket_lock};
-				auto leftover = std::move(sock.orphans);
-				const auto real_expected = expected_size + hdr_size;
-				const auto remaining_size = (sock.orphan_size >= real_expected ?
-									   sock.orphan_size :
-									   real_expected - sock.orphan_size);
-				
-				sock.orphan_size = 0;
-				from_network(std::move(l),remaining_size,std::move(leftover ? *leftover : sock.spare));
-			}
-			//try again to find our message
-			return raw_receive(how_many,sizes,bufs);
 		}
 		
 		std::size_t connection::raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs){

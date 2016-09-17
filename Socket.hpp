@@ -35,6 +35,7 @@ namespace mutils{
 		bool valid() const;
 		
 		std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
+		std::size_t drain(std::size_t buf_size, void* target);
 
 		using connection::receive;
 		using connection::send;

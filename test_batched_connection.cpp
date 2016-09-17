@@ -5,7 +5,7 @@
 using namespace mutils;
 using namespace std;
 
-int main(int, char* argv[]){
+int main(int argc, char* argv[]){
 
 	{
 		constexpr int port = 9845;
@@ -19,7 +19,8 @@ int main(int, char* argv[]){
 				s.receive(recv);
 				assert(recv == recv_port);
 				recv = 0;
-				s.receive(recv);
+				auto amount = s.drain(1000,&recv);
+				assert(amount == sizeof(recv));
 				assert(recv == recv_port);
 			}};
 		Socket s = Socket::connect(decode_ip("127.0.0.1"),port);
@@ -28,7 +29,7 @@ int main(int, char* argv[]){
 		t.join();
 	}
 	
-	const auto portno = std::atoi(argv[1]);
+	const auto portno = (argc > 1 ? std::atoi(argv[1]) : 9876);
 	std::cout << "portno is: " << portno << std::endl;
 	using action_t = typename batched_connection::receiver::action_t;
 	std::thread receiver{[&]{
@@ -42,7 +43,7 @@ int main(int, char* argv[]){
 				}}.loop_until_false_set();
 		}};
 	sleep(1);
-	batched_connection::batched_connections bc(decode_ip("127.0.0.1"),portno,100);
+	batched_connection::batched_connections bc(decode_ip("127.0.0.1"),portno,MAX_THREADS/2);
 	using connection = batched_connection::locked_connection;
 
 	std::function<void (const connection&) > looper;

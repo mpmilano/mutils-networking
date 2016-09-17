@@ -61,6 +61,10 @@ namespace mutils{
 		return Socket{sockfd};
 	}
 
+	std::size_t Socket::drain(std::size_t size, void* target){
+		return recv(i->sockID, target,size,0);
+	}
+
 	namespace {
 	std::size_t receive_helper_socket_cpp(int& sockID, std::size_t how_many, std::size_t const * const sizes, void ** bufs, bool peek){
 		/*std::cout << "receiving " << how_many << " payloads" << std::endl; //*/

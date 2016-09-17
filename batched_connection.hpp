@@ -24,8 +24,14 @@ namespace mutils{
 			std::map<std::size_t,incoming_message_queue> incoming;
 			std::mutex socket_lock;
 
-			std::unique_ptr<buf_ptr> orphans;
-			std::size_t orphan_size{0};
+			struct orphan_t{
+				buf_ptr buf;
+				std::size_t size;
+				
+				orphan_t(buf_ptr b, std::size_t s)
+					:buf(std::move(b)),size(s){}
+			};
+			std::unique_ptr<orphan_t> orphans{nullptr};
 			buf_ptr spare{BufGen::allocate()};
 			
 			SocketBundle(Socket sock):sock(sock){}
@@ -45,7 +51,8 @@ namespace mutils{
 		private:
 			void process_data (std::unique_lock<std::mutex> sock_lock, buf_ptr _payload, std::size_t payload_size);
 			void from_network (std::unique_lock<std::mutex> l,
-							   std::size_t expected_size, buf_ptr from);
+							   std::size_t expected_size, buf_ptr from,
+							   std::size_t offset);
 		public:
 			std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
 			std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const);
