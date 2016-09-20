@@ -93,7 +93,7 @@ namespace mutils{
 					{
 						//payload is at least a full message; queue up that message and keep going.
 						auto &queue = sock.incoming.at(id);
-						std::unique_lock<std::shared_mutex> l{queue.queue_lock};
+						std::unique_lock<std::mutex> l{queue.queue_lock};
 						queue.queue.emplace_back(payload->split(hdr_size));
 						payload = &queue.queue.back();
 					}
@@ -123,7 +123,7 @@ namespace mutils{
 			const auto expected_size = total_size(how_many, sizes);
 			while (true){
 				if (my_queue.queue.size() > 0){
-					std::shared_lock<std::shared_mutex> l{my_queue.queue_lock};
+					std::unique_lock<std::mutex> l{my_queue.queue_lock};
 					auto msg = std::move(my_queue.queue.front());
 					my_queue.queue.pop_front();
 					assert(msg.size() == expected_size);

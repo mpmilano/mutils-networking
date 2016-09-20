@@ -62,7 +62,7 @@ namespace mutils{
 								//for (auto &s : p.next_expected_size)
 									//std::cout << s << " ";
 								//std::cout << std::endl;
-								std::unique_lock<std::mutex> l{p.mut};
+								std::unique_lock<std::mutex> l{*p.mut};
 								char recv_buf[size];
 								s.receive(size,recv_buf);
 								//std::cout << "message received" << std::endl;
