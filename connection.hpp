@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include "SerializationSupport.hpp"
+#include "extras"
 
 namespace mutils{
 
@@ -14,7 +15,7 @@ struct connection{
 	
 	template<typename... T>
 	void receive(T&... t){
-		static_assert(forall(std::is_pod<T>::value...),
+		static_assert(forall_nt(std::is_pod<T>::value...),
 					  "Error: can't do non-POD right now");
 		/*std::cout << "yup you called this one" << std::endl; //*/
 		void* recv[] = {&t...};
@@ -31,11 +32,22 @@ struct connection{
 
 	template<typename... T>
 	auto receive(){
-		static_assert(forall(std::is_pod<T>::value...),
+		static_assert(forall_nt(std::is_pod<T>::value...),
 					  "Error: can't do non-POD right now");
-		static_assert(forall(std::is_trivially_constructible<T>::value...),
+		static_assert(forall_nt(std::is_trivially_constructible<T>::value...),
 					  "Error: can't build this with new correctly");
 		return receive_helper(new T()...);
+	}
+
+	template<typename... T>
+	std::tuple<T...> receive_tpl(std::tuple<T...>*){
+		return receive<T...>();
+	}
+	
+	template<typename T>
+	void receive_tpl(){
+		T *t{nullptr};
+		return receive_tpl(t);
 	}
 
 	template<typename> using make_these_ints = int;
@@ -52,7 +64,7 @@ struct connection{
 				 int size,
 				 make_these_ints<T2>... sizes){
 		static_assert(std::is_base_of<ByteRepresentable, T1>::value &&
-					  forall(std::is_base_of<ByteRepresentable, T2>::value...),
+					  forall_nt(std::is_base_of<ByteRepresentable, T2>::value...),
 					  "Error: can't do non-POD right now");
 		
 		void* recv[] = {alloca(size),alloca(sizes)...};
@@ -79,9 +91,21 @@ struct connection{
 	void send(const T&... t){
 		std::size_t sizes[] = {bytes_size(t)...};
 		void *bufs[] = {to_bytes_helper(t,alloca(bytes_size(t)))...};
-		static_assert(forall((std::is_pod<T>::value || std::is_base_of<ByteRepresentable, T>::value)...),
+		static_assert(forall_nt((std::is_pod<T>::value || std::is_base_of<ByteRepresentable, T>::value)...),
 			"Error: cannot serialize these types.");
 		raw_send(sizeof...(T),sizes,bufs);
+	}
+
+	auto receive(std::size_t size, void *data){
+		std::size_t sizes[] = {size};
+		void* bufs[] = {data};
+		return raw_receive(1,sizes,bufs);
+	}
+
+	auto send (std::size_t size, void const * const data){
+		std::size_t sizes[] = {size};
+		const void* bufs[] = {data};
+		return raw_send(1,sizes,bufs);
 	}
 	
 };

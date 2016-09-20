@@ -16,7 +16,7 @@ namespace mutils{
 		
 		struct incoming_message_queue{
 			std::list<buf_ptr> queue;
-			std::shared_mutex queue_lock;
+			std::mutex queue_lock;
 		};
 		
 		struct SocketBundle{
@@ -88,19 +88,19 @@ namespace mutils{
 			struct connection;
 			const int port;
 			using action_t =
-				std::function<std::vector<std::size_t> (void**, ::mutils::connection&)>;
+				std::function<void (void*, ::mutils::connection&)>;
 			
 			struct action_items{
 				action_t action;
-				std::vector<std::size_t> next_expected_size;
-				std::mutex mut;
+				std::unique_ptr<std::mutex> mut{new std::mutex()};
 				action_items() = default;
-				action_items(std::pair<action_t, std::size_t> a)
-					:action(a.first),next_expected_size(a.second){}
-				action_items(action_items&&) = default;
+				action_items(action_t a)
+					:action(std::move(a)){}
+				action_items(action_items&& o)
+					:action(std::move(o.action)),
+					 mut(std::move(o.mut)){}
 			};
-			std::function<std::pair<action_t,
-									std::vector<std::size_t> > ()> new_connection;
+			std::function<action_t () > new_connection;
 
 			std::shared_mutex map_lock;
 			std::map<std::size_t,  action_items> receivers;

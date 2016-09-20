@@ -49,10 +49,8 @@ namespace mutils{
 							//std::cout << "generating new entry" << std::endl;
 							need_new_entry = false;
 							std::unique_lock<std::shared_mutex> l{map_lock};
-							auto rcv = new_connection();
 							auto &elem = receivers[id];
-							elem.action = rcv.first;
-							elem.next_expected_size = rcv.second;
+							elem.action = new_connection();
 						}
 						{
 							//std::cout << "locking for receipt" << std::endl;
@@ -65,15 +63,9 @@ namespace mutils{
 									//std::cout << s << " ";
 								//std::cout << std::endl;
 								std::unique_lock<std::mutex> l{p.mut};
-								void* bufs[p.next_expected_size.size()];
-								for (std::size_t i = 0; i < p.next_expected_size.size(); ++i){
-									bufs[i] = alloca(p.next_expected_size.at(i));
-								}
-								s.raw_receive(p.next_expected_size.size(),
-										  p.next_expected_size.data(),
-										  bufs);
+								char recv_buf[size];
+								s.receive(size,recv_buf);
 								//std::cout << "message received" << std::endl;
-								p.next_expected_size = p.action(bufs,conn);
 								//std::cout << "action performed" << std::endl;
 								break;
 							}
