@@ -91,8 +91,6 @@ struct connection{
 	void send(const T&... t){
 		std::size_t sizes[] = {bytes_size(t)...};
 		void *bufs[] = {to_bytes_helper(t,alloca(bytes_size(t)))...};
-		static_assert(forall_nt((std::is_pod<T>::value || std::is_base_of<ByteRepresentable, T>::value)...),
-			"Error: cannot serialize these types.");
 		raw_send(sizeof...(T),sizes,bufs);
 	}
 

@@ -42,6 +42,7 @@ namespace mutils{
 		struct connection : public ::mutils::connection {
 			SocketBundle& sock;
 			const std::size_t id;
+			void* bonus_item{nullptr};
 			incoming_message_queue& my_queue;
 			//use this if there's nothing left over.
 			connection(SocketBundle& s, std::size_t id);

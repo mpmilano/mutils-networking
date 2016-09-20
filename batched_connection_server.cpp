@@ -34,6 +34,7 @@ namespace mutils{
 
 		void receiver::on_accept(bool& alive, Socket s){
 			//std::cout << "beginning accept loop" << std::endl;
+                    try{
 			while (alive) {
 				if (alive) {
 					//std::cout << "looping " << std::endl;
@@ -78,6 +79,10 @@ namespace mutils{
 				}
 				else break;
 			}
+                    }
+                    catch(const ProtocolException& ){
+                        //assume we've been broken.  Just let this thread die.
+                    }
 		}
 		
 		receiver::~receiver(){

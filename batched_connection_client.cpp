@@ -81,6 +81,7 @@ namespace mutils{
 			else {
 				const std::size_t &id = ((std::size_t*)payload->payload)[0];
 				const std::size_t &size = ((std::size_t*)payload->payload)[1];
+				std::cout << "Received message of size: " << size << std::endl;
 				if (payload_size < size + hdr_size){
 					std::cout << payload_size << std::endl;
 					assert(!sock.orphans);
@@ -126,6 +127,7 @@ namespace mutils{
 					std::unique_lock<std::mutex> l{my_queue.queue_lock};
 					auto msg = std::move(my_queue.queue.front());
 					my_queue.queue.pop_front();
+					std::cout << "popping message of expected size: " << expected_size << std::endl;
 					assert(msg.size() == expected_size);
 					copy_into(how_many,sizes,bufs,(char*)msg.payload);
 					return expected_size;
