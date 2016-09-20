@@ -66,6 +66,7 @@ namespace mutils{
 								char recv_buf[size];
 								s.receive(size,recv_buf);
 								//std::cout << "message received" << std::endl;
+                                                                p.action(recv_buf,conn);
 								//std::cout << "action performed" << std::endl;
 								break;
 							}

@@ -34,12 +34,11 @@ int main(int argc, char* argv[]){
 	using action_t = typename batched_connection::receiver::action_t;
 	std::thread receiver{[&]{
 			batched_connection::receiver{portno,[]{
-					return std::pair<action_t,std::vector<std::size_t> >{
-						[](void** inbnd, connection& c) -> std::vector<std::size_t>{
-							int rcv = *((int*)(inbnd[0]));
+					return action_t{
+						[](void* inbnd, connection& c) -> void{
+							int rcv = *((int*)(inbnd));
 							c.send(rcv);
-							return {sizeof(int)};
-						}, {sizeof(int)}};
+						}};
 				}}.loop_until_false_set();
 		}};
 	sleep(1);
