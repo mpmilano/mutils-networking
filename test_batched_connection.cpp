@@ -51,18 +51,61 @@ int main(int argc, char* argv[]){
 		int my_msg;
 		int receipt;
 	};
+	using namespace std::chrono;
+	using time_t = decltype(high_resolution_clock::now());
+	using duration_t =
+		std::decay_t<decltype(high_resolution_clock::now() -
+							  high_resolution_clock::now())>;
+	unsigned long long total_events{0};
+	unsigned long long outlier10_count{0};
+	unsigned long long outlier100_count{0};
+	std::map<int, std::atomic<time_t> > event_counts;
+	for (int index = 0; index < MAX_THREADS/2; ++index) event_counts[index] = high_resolution_clock::now();
+	duration_t total_time{0};
 	try {
+		//randomly generate lenghts,
+		//also maybe don't echo, increment? 
 		for(int index = 0; index < MAX_THREADS/2; ++index){
 			auto my_msg = index;
 			if (my_msg %50 == 0) std::cout << "on message " << my_msg << std::endl;
 			connections.emplace(my_msg,bc.spawn());
 			auto &c = connections.at(my_msg);
-			GlobalPool::inst.push([&c,my_msg](int){
+			GlobalPool::inst.push([&c,
+								   &total_time,
+								   &event_counts,
+								   &total_events,
+								   &outlier10_count,
+								   &outlier100_count,
+								   my_msg](int) mutable
+								  {
 					for(int i = 0; true; ++i){
-						if (i % 100 == 0) std::cout << "connection " << my_msg << " on round " << i << std::endl;
+						event_counts.at(my_msg) = high_resolution_clock::now();
+						auto average = total_time / (total_events + 1.0);
+						//auto outlier10_average = outlier10_count / (total_events + 1.0);
+						//auto outlier100_average = outlier100_count / (total_events + 1.0);
+						auto start = high_resolution_clock::now();
 						c->send(my_msg);
 						int receipt{-1};
 						c->receive(receipt);
+						auto end = high_resolution_clock::now();
+						auto duration = (end - start);
+						int num_behind = 0;
+						if (i % 500 == 0) {
+							//if (total_events > 0) std::cout << duration_cast<microseconds>(average).count() << std::endl;
+							//std::cout << outlier100_average << std::endl;
+							for (const auto &indx : event_counts){
+								if ((start - indx.second.load()) > 6s){
+									++num_behind;
+								}
+							}
+							if (num_behind > 0) std::cout << num_behind << std::endl;
+						}
+						if (i > 10000){
+							if (duration > 10*average) ++outlier10_count;
+							if (duration > 100*average) ++outlier100_count;
+							total_time += duration;
+							++total_events;
+						}
 						assert(receipt == my_msg);
 						if (receipt != my_msg){
 							assert(false);

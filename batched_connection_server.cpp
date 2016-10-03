@@ -9,10 +9,13 @@ namespace mutils{
 		
 		struct receiver::connection: public ::mutils::connection {
 			Socket s;
+			receiver &rvr;
 			const std::size_t id;
-			connection(Socket s, size_t id):s(s),id(id){}
+			connection(Socket s, size_t id, receiver &rvr):s(s),rvr(rvr),id(id){}
 			std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const buf){
-				return send_with_id(s,id,how_many,sizes,buf,total_size(how_many,sizes));
+				auto ret = send_with_id(s,id,how_many,sizes,buf,total_size(how_many,sizes));
+				rvr.bytes_sent += ret;
+				return ret;
 			}
 			bool valid() const {return true;}
 			std::size_t raw_receive(std::size_t, std::size_t const * const, void **) {assert(false);}
@@ -36,16 +39,15 @@ namespace mutils{
 			//std::cout << "beginning accept loop" << std::endl;
                     try{
 			while (alive) {
-				if (alive) {
 					//std::cout << "looping " << std::endl;
 					std::size_t id;
 					std::size_t size;
 					s.receive(id);
 					s.receive(size);
-					connection conn{s,id};
+					connection conn{s,id,*this};
 					bool need_new_entry = false;
 					//std::cout << "received a message on connection " << id << std::endl;
-					for (bool i = true; i || need_new_entry; i = false){
+					for (bool i = true; i || need_new_entry; i = false) {
 						while (need_new_entry){
 							//std::cout << "generating new entry" << std::endl;
 							need_new_entry = false;
@@ -55,19 +57,20 @@ namespace mutils{
 						}
 						{
 							//std::cout << "locking for receipt" << std::endl;
+							//this is a "read" acquire, for a reader-writer lock
 							std::shared_lock<std::shared_mutex> l{map_lock};
 							if (receivers.count(id) > 0) {
 								//std::cout << "receiver ready, receiving message" << std::endl;
 								auto &p = receivers.at(id);
 								//std::cout << " message sizes: ";
 								//for (auto &s : p.next_expected_size)
-									//std::cout << s << " ";
+								//std::cout << s << " ";
 								//std::cout << std::endl;
 								std::unique_lock<std::mutex> l{*p.mut};
 								char recv_buf[size];
 								s.receive(size,recv_buf);
 								//std::cout << "message received" << std::endl;
-                                                                p.action(recv_buf,conn);
+								p.action(recv_buf,conn);
 								//std::cout << "action performed" << std::endl;
 								break;
 							}
@@ -76,17 +79,17 @@ namespace mutils{
 							}
 						}
 					}
-				}
-				else break;
 			}
                     }
                     catch(const ProtocolException& ){
+                        std::cout << "protocol exception: connection broken" << std::endl;
+						std::cout << "bytes sent so far: " << bytes_sent << std::endl;
                         //assume we've been broken.  Just let this thread die.
                     }
 		}
 		
 		receiver::~receiver(){
-			*acl.alive = false;
+			*(acl.alive) = false;
 		}
 	}
 }

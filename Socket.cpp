@@ -25,8 +25,8 @@ namespace mutils{
 	bool Socket::valid() const {
 		return i && i->sockID > 0;
 	}
-
-	Socket Socket::connect(int ip, int portno){
+	
+	Socket::Socket(int ip, int portno){
 		int sockfd;
 		struct sockaddr_in serv_addr;
 		struct hostent *server;
@@ -58,11 +58,19 @@ namespace mutils{
 			throw SocketException{};
 		}
 		complete = true;
-		return Socket{sockfd};
+		this->i.reset(new Internals(sockfd));
 	}
-
+	
+	Socket Socket::connect(int ip, int portno){
+		return Socket{ip,portno};
+	}
+	
 	std::size_t Socket::drain(std::size_t size, void* target){
-		return recv(i->sockID, target,size,0);
+		auto ret = recv(i->sockID, target,size,0);
+		if (ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)){
+			throw Timeout{};
+		}
+		else return ret;
 	}
 
 	namespace {
@@ -88,6 +96,9 @@ namespace mutils{
 		auto n = recvmsg(sockID,&dst,(peek ? MSG_PEEK : MSG_WAITALL));
 		/*std::cout << "we actually received " << n << " bytes" << std::endl; //*/
 		if (n < 0) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK){
+				throw Timeout{};
+			}
 			std::stringstream err;
 			err << "error: " << std::strerror(errno);
 			throw ProtocolException(err.str());
