@@ -11,10 +11,12 @@ namespace mutils{
 			Socket s;
 			receiver &rvr;
 			const std::size_t id;
+			std::size_t *bytes_sent{nullptr};
 			connection(Socket s, size_t id, receiver &rvr):s(s),rvr(rvr),id(id){}
 			std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const buf){
 				auto ret = send_with_id(s,id,how_many,sizes,buf,total_size(how_many,sizes));
 				rvr.bytes_sent += ret;
+				(*bytes_sent) += ret;
 				return ret;
 			}
 			bool valid() const {return true;}
@@ -37,7 +39,6 @@ namespace mutils{
 
 		void receiver::on_accept(bool& alive, Socket s){
 			//std::cout << "beginning accept loop" << std::endl;
-                    try{
 			while (alive) {
 					//std::cout << "looping " << std::endl;
 					std::size_t id;
@@ -62,6 +63,7 @@ namespace mutils{
 							if (receivers.count(id) > 0) {
 								//std::cout << "receiver ready, receiving message" << std::endl;
 								auto &p = receivers.at(id);
+								conn.bytes_sent = &p.bytes_sent;
 								//std::cout << " message sizes: ";
 								//for (auto &s : p.next_expected_size)
 								//std::cout << s << " ";
@@ -80,15 +82,14 @@ namespace mutils{
 						}
 					}
 			}
-                    }
-                    catch(const ProtocolException& ){
-                        std::cout << "protocol exception: connection broken" << std::endl;
-						std::cout << "bytes sent so far: " << bytes_sent << std::endl;
-                        //assume we've been broken.  Just let this thread die.
-                    }
 		}
 		
 		receiver::~receiver(){
+			std::cout << "bytes sent so far: " << bytes_sent << std::endl;
+			for (const auto& p : receivers){
+				std::cout << p.first << ":" << p.second.bytes_sent << " ";
+			}
+			std::cout << std::endl;
 			*(acl.alive) = false;
 		}
 	}

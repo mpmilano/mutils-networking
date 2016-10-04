@@ -19,6 +19,7 @@ namespace mutils {
 			std::mutex queue_lock;
 			std::atomic<std::chrono::high_resolution_clock::time_point> last_used
 				{std::chrono::high_resolution_clock::now()};
+			std::size_t receive_count{0};
 		};
 
 		/** Maintains the message queues for all logical connections
@@ -159,6 +160,7 @@ namespace mutils {
 			struct action_items {
 				action_t action;
 				std::unique_ptr<std::mutex> mut{new std::mutex()};
+				std::size_t bytes_sent{0};
 				action_items() = default;
 				action_items(action_t a)
 					:action(std::move(a)){}

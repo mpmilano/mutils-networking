@@ -13,6 +13,4 @@ namespace mutils{
 		return accum;
 	}
 
-	void copy_into(std::size_t how_many,std::size_t const * const sizes,void ** bufs, char* src);
-
 }

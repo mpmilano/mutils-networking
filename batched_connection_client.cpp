@@ -26,6 +26,12 @@ namespace mutils{
 		
 		~batched_connections_impl(){
 			std::cerr << "CLIENT BYTES RECEIVED: " << bytes_received << std::endl;
+			for (const auto &v : bundles){
+				for (const auto &p : v->incoming){
+					std::cout << p.first << ":" << p.second.receive_count << " ";
+				}
+			}
+			std::cout << std::endl;
 		}
 
 		vector<size_t> abandoned_conections(const microseconds &ms){
@@ -111,6 +117,7 @@ namespace mutils{
 						queue.queue.emplace_back(payload->split(hdr_size));
 						queue.last_used = std::chrono::high_resolution_clock::now();
 						payload = &queue.queue.back();
+						queue.receive_count += queue.queue.back().size();
 					}
 					if (payload_size > size + hdr_size){
 						process_data(std::move(sock_lock), payload->split(size),
