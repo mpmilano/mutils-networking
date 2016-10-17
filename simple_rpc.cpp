@@ -6,6 +6,7 @@ namespace mutils{
 
 		connection::connection(int ip, int portno):s(ip,portno){}
 		std::size_t connection::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs) {
+			//std::cout << "sub-process receive expects " << total_size(how_many,sizes) << " bytes" << std::endl;
 			return s.raw_receive(how_many,sizes,bufs);
 		}
 		std::size_t connection::raw_send(std::size_t how_many, std::size_t const * const sizes_o, void const * const * const bufs_o) {
@@ -16,11 +17,11 @@ namespace mutils{
 			bufs[0] = &real_size;
 			memcpy(sizes + 1,sizes_o,how_many * sizeof(std::size_t));
 			memcpy(bufs + 1,bufs_o,how_many * sizeof(void*));
-			return s.raw_send(how_many+1,sizes,bufs);
+			return s.raw_send(how_many+1,sizes,bufs) - sizes[0];
 		}
 		
-		connections::connections(const int ip, const int port, const int)
-			:sp(5000,5000,[ip,port]{
+		connections::connections(const int ip, const int port, const int max_connections)
+			:sp(max_connections / 2,max_connections / 2,[ip,port]{
 					return new connection{ip,port};
 				}){}
 		

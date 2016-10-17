@@ -87,6 +87,9 @@ namespace mutils{
 
 		void connection::process_data (std::unique_lock<std::mutex> sock_lock, buf_ptr _payload, std::size_t payload_size)
 		{
+			static auto const max_vector_size =
+				std::numeric_limits<unsigned char>::max()
+				+ (sizeof(std::size_t)*3);
 			auto* payload = &_payload;
 
 			using orphan_t = typename SocketBundle::orphan_t;
@@ -101,6 +104,7 @@ namespace mutils{
 			else {
 				const std::size_t &id = ((std::size_t*)payload->payload)[0];
 				const std::size_t &size = ((std::size_t*)payload->payload)[1];
+				assert(size <= max_vector_size);
 				if (payload_size < size + hdr_size) {
 					assert(!sock.orphans);
 					sock.orphans =
@@ -109,22 +113,23 @@ namespace mutils{
 					assert(payload_size > 0);
 				}
 				else {
-					{
-						//payload is at least a full message; queue up that message and keep going.
-						auto &queue = sock.incoming.at(id);
-						std::unique_lock<std::mutex> l{queue.queue_lock};
-						//this is the right client.  give it the part after the header.
-						queue.queue.emplace_back(payload->split(hdr_size));
-						queue.last_used = std::chrono::high_resolution_clock::now();
-						payload = &queue.queue.back();
-						queue.receive_count += queue.queue.back().size();
-					}
+					//payload is at least a full message; queue up that message and keep going.
+					auto &queue = sock.incoming.at(id);
+					std::unique_lock<std::mutex> l{queue.queue_lock};
+					//this is the right client.  give it the part after the header.
+					queue.queue.emplace_back(payload->split(hdr_size)); 
+					queue.last_used = std::chrono::high_resolution_clock::now();
+					payload = &queue.queue.back();
+					auto recv_count_size = queue.queue.back().size();
+					queue.receive_count += recv_count_size;
+					auto leftover = payload->split(size);
+					l.unlock();
 					if (payload_size > size + hdr_size){
-						process_data(std::move(sock_lock), payload->split(size),
+						process_data(std::move(sock_lock), std::move(leftover),
 									 payload_size - size - hdr_size);
 					}
 					else {
-						sock.spare = payload->split(size);
+						sock.spare = std::move(leftover);
 					}
 				}
 			}
@@ -142,12 +147,14 @@ namespace mutils{
 									   std::size_t offset)
 		{
 			auto into = from.grow_to_fit(expected_size + offset);
-			assert(into.size() > offset);
+			auto into_size = into.size();
+			assert(into_size > offset);
 			std::size_t recv_size{0};
 			try {
 				recv_size = sock.sock.drain(into.size() - offset,
 											into.payload + offset);
 				sock.bytes_received += recv_size;
+				assert(into_size >= recv_size);
 			}
 			catch (const Timeout&){
 				throw ResourceReturn{std::move(l), std::move(into)};
@@ -164,8 +171,8 @@ namespace mutils{
 					auto msg = std::move(my_queue->queue.front());
 					my_queue->queue.pop_front();
 					if (msg.size() != expected_size){
-						std::cout << msg.size() << std::endl;
-						std::cout << expected_size << std::endl;
+						std::cerr << msg.size() << std::endl;
+						std::cerr << expected_size << std::endl;
 					}
 					assert(msg.size() == expected_size);
 					copy_into(how_many,sizes,bufs,(char*)msg.payload);

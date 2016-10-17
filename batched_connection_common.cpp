@@ -13,7 +13,8 @@ namespace mutils{
 		payload_bufs[1] = &total_size;
 		memcpy(payload_bufs + 2,bufs,how_many * sizeof(void*));
 		
-		return sock.raw_send(how_many+2,size_bufs,payload_bufs);
+		return sock.raw_send(how_many+2,size_bufs,payload_bufs) -
+			(sizeof(id) + sizeof(total_size));
 	}
 	
 

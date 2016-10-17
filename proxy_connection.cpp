@@ -18,7 +18,7 @@ namespace mutils{
 					bufs[1] = &real_size;
 					memcpy(sizes + 2,sizes_o,how_many * sizeof(std::size_t));
 					memcpy(bufs + 2,bufs_o,how_many * sizeof(void*));
-					return s.raw_send(how_many+2,sizes,bufs);				
+					return s.raw_send(how_many+2,sizes,bufs) - (2*sizeof(std::size_t));
 				}
 			auto retry_receive_unless_false(const bool& alive, Socket& s, std::size_t how_many, std::size_t const * const sizes, void ** bufs){
 				while (alive){
@@ -59,6 +59,11 @@ namespace mutils{
 			std::vector<char> payload;
 			queue->wait_dequeue(payload);
 			assert(payload.size() > 0);
+			if (total_size(how_many,sizes) != payload.size()){
+				std::cerr << total_size(how_many,sizes) << std::endl;
+				std::cerr << payload.size() << std::endl;
+			}
+			assert(total_size(how_many,sizes) == payload.size());
 			copy_into(how_many,sizes,bufs,payload.data());
 			return payload.size();
 		}
@@ -104,31 +109,39 @@ namespace mutils{
 			:listen(port),acl{
 			//This function is onReceipt in ServerSocket.cpp
 			[new_connection](bool &alive, Socket s) {
-				SimpleConcurrentMap<std::size_t, action_t> action_map;
+				struct action_pair{
+					action_t action;
+					std::mutex mut;
+					auto operator=(action_t action) {
+						return this->action = action;
+					}
+				};
+				SimpleConcurrentMap<std::size_t, action_pair> action_map;
 				while (alive) {
+					auto _rcv = receive_message(alive,s);
+					if (action_map.count(_rcv.id) == 0){
+						action_map[_rcv.id] = new_connection();
+					}
 					GlobalPool::push([&s,&action_map,
 									  &new_connection,
-									  rcv = receive_message(alive,s)](int){
-							if (action_map.count(rcv.id) == 0){
-								action_map[rcv.id] = new_connection();
-							}
-							else {
-								struct connection : ::mutils::connection {
-									Socket &s;
-									const std::size_t id;
-									connection(decltype(s) s, decltype(id) id)
-										:s(s),id(id){}
-									
-									bool valid() const {return s.valid();}
-									std::size_t raw_receive(std::size_t, std::size_t const * const, void **) {assert(false);}
-									std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const buf){
-										return send_with_id2(s,id,how_many,sizes,buf);
-									}
-								};
-								connection c{s,rcv.id};
-								const void* v = rcv.payload_buf.data();
-								action_map.at(rcv.id)(v,c);
-							}
+									  rcv = std::move(_rcv)](int) -> void{
+							struct connection : ::mutils::connection {
+								Socket &s;
+								const std::size_t id;
+								connection(decltype(s) s, decltype(id) id)
+									:s(s),id(id){}
+								
+								bool valid() const {return s.valid();}
+								std::size_t raw_receive(std::size_t, std::size_t const * const, void **) {assert(false);}
+								std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const buf){
+									return send_with_id2(s,id,how_many,sizes,buf);
+								}
+							};
+							connection c{s,rcv.id};
+							const void* v = rcv.payload_buf.data();
+							auto &action = action_map[rcv.id];
+							std::unique_lock<std::mutex> l{action.mut};
+							action.action(v,c);
 									 });
 				}
 			}}

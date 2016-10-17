@@ -1,9 +1,13 @@
 #include "batched_connection.hpp"
+#include "simple_rpc.hpp"
+#include "proxy_connection.hpp"
 #include "GlobalPool.hpp"
 #include <unistd.h>
 
 using namespace mutils;
 using namespace std;
+namespace conn_space = mutils::proxy_connection;
+
 
 int main(int argc, char* argv[]){
 
@@ -31,19 +35,53 @@ int main(int argc, char* argv[]){
 	
 	const auto portno = (argc > 1 ? std::atoi(argv[1]) : 9876);
 	std::cout << "portno is: " << portno << std::endl;
-	using action_t = typename batched_connection::receiver::action_t;
+	using action_t = typename conn_space::receiver::action_t;
 	std::thread receiver{[&]{
-			batched_connection::receiver{portno,[]{
+			conn_space::receiver{portno,[]{
+					//std::cout << "receiver triggered" << std::endl;
 					return action_t{
-						[](void* inbnd, connection& c) -> void{
-							int rcv = *((int*)(inbnd));
-							c.send(rcv);
+						[on_first_message = std::make_shared<bool>(true),
+						 assert_single_threaded = std::make_shared<std::mutex>()]
+							(const void* inbnd, connection& c) -> void{
+							bool success = assert_single_threaded->try_lock();
+							assert(success);
+							AtScopeEnd ase{[&]{assert_single_threaded->unlock();}};
+							//std::cout << "received message" << std::endl;
+							if (*on_first_message){
+								//std::cout << "expected this message is size_t" << std::endl;
+								int rcv = *((int*)(inbnd));
+								c.send(rcv);
+								*on_first_message = false;
+							}
+							else{
+								//std::cout << "expected this message is vector" << std::endl;
+								auto received = from_bytes<std::vector<unsigned char> >(nullptr,((char*) inbnd));
+								{
+									stringstream ss;
+									ss << "received " << received->size() << " element vector" << std::endl;
+									//std::cout << ss.str();
+								}
+								auto random = better_rand();
+								assert(random >= 0 && random <= 1);
+								uint index = random * received->size();
+								if (index == received->size()) index = 0;
+								if (received->size() != 0){
+									assert(index < received->size());
+									(*received)[index]++;
+								}
+								{
+									stringstream ss;
+									ss << "sending " << c.send(*received) << " bytes of vector back" << std::endl;
+									//std::cout << ss.str();
+								}
+								*on_first_message = true;
+							}
 						}};
 				}}.loop_until_false_set();
 		}};
 	sleep(1);
-	batched_connection::batched_connections bc(decode_ip("127.0.0.1"),portno,MAX_THREADS/2);
-	using connection = batched_connection::locked_connection;
+	conn_space::connections bc(decode_ip("127.0.0.1"),portno,MAX_THREADS/2);
+	using connection = conn_space::locked_connection;
 
 	std::function<void (const connection&) > looper;
 	std::map<int, connection> connections;
@@ -69,8 +107,7 @@ int main(int argc, char* argv[]){
 			auto my_msg = index;
 			if (my_msg %50 == 0) std::cout << "on message " << my_msg << std::endl;
 			connections.emplace(my_msg,bc.spawn());
-			auto &c = connections.at(my_msg);
-			GlobalPool::inst.push([&c,
+			GlobalPool::inst.push([wc = connections.at(my_msg).weak(),
 								   &total_time,
 								   &event_counts,
 								   &total_events,
@@ -78,20 +115,66 @@ int main(int argc, char* argv[]){
 								   &outlier100_count,
 								   my_msg](int) mutable
 								  {
-					for(int i = 0; true; ++i){
+					for(unsigned int i = 0; true; ++i){
 						event_counts.at(my_msg) = high_resolution_clock::now();
 						auto average = total_time / (total_events + 1.0);
 						//auto outlier10_average = outlier10_count / (total_events + 1.0);
 						//auto outlier100_average = outlier100_count / (total_events + 1.0);
 						auto start = high_resolution_clock::now();
-						c->send(my_msg);
 						int receipt{-1};
-						c->receive(receipt);
+						{
+							auto c = wc.lock();
+							c->send(my_msg);
+							//std::cout << "sending initial message" << std::endl;
+							c->receive(receipt);
+							//std::cout << "received initial message reply" << std::endl;
+						}
 						auto end = high_resolution_clock::now();
+						{
+							std::vector<unsigned char> my_other_message;
+							const std::size_t other_message_size = (better_rand()*50) + 1;
+							assert(other_message_size > 0);
+							const unsigned char max_uchar = std::numeric_limits<unsigned char>::max();
+							for (std::size_t i = 0; i < other_message_size; ++i){
+								my_other_message.push_back(better_rand() * max_uchar);
+							}
+							//std::cout << "sending my other message" << std::endl;
+							auto wire_size = c->send(my_other_message);
+							{
+								stringstream ss;
+								ss << "sent " << my_other_message.size() << " element vector" << std::endl;
+								//std::cout << ss.str();
+							}
+							::mutils::connection& c_super = *c;
+							{
+								stringstream ss;
+								ss << "expecting " << wire_size << "bytes of vector in reply" << std::endl;
+								//cout << ss.str();
+							}
+							auto received_other_message = c_super.receive<std::vector<unsigned char> >
+								((DeserializationManager*)nullptr, wire_size);
+							//std::cout << "received my other message reply" << std::endl;
+							bool has_been_off = false;
+							assert(my_other_message.size() == received_other_message->size());
+							for (std::size_t i = 0; i < my_other_message.size(); ++i){
+								bool check = (my_other_message.at(i) ==
+											  received_other_message->at(i)
+											  || (has_been_off ? true :
+												  (has_been_off = true,
+												   (my_other_message.at(i) + 1) ==
+												   received_other_message->at(i))));
+								if  (!check){
+									std::cerr << my_other_message << std::endl;
+									std::cerr << *received_other_message << std::endl;
+								}
+								assert(check);
+							}
+							assert(has_been_off || (my_other_message.size() == 0));
+						}
 						auto duration = (end - start);
 						int num_behind = 0;
-						if (i % 500 == 0) {
-							//if (total_events > 0) std::cout << duration_cast<microseconds>(average).count() << std::endl;
+						if (i % 2000 == 0) {
+							if (total_events > 0) std::cout << duration_cast<microseconds>(average).count() << std::endl;
 							//std::cout << outlier100_average << std::endl;
 							for (const auto &indx : event_counts){
 								if ((start - indx.second.load()) > 6s){
@@ -115,6 +198,7 @@ int main(int argc, char* argv[]){
 					}
 				});
 		}
+		connections.clear();
 	}
 	catch (const debug_info& exn){
 		std::cerr << "message error: " << exn.my_msg << " : " << exn.receipt << std::endl;

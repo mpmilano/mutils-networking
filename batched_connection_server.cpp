@@ -15,8 +15,8 @@ namespace mutils{
 			connection(Socket s, size_t id, receiver &rvr):s(s),rvr(rvr),id(id){}
 			std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const buf){
 				auto ret = send_with_id(s,id,how_many,sizes,buf,total_size(how_many,sizes));
-				rvr.bytes_sent += ret;
-				(*bytes_sent) += ret;
+				rvr.bytes_sent += ret + (sizeof(std::size_t)*2);
+				(*bytes_sent) += ret + (sizeof(std::size_t)*2);
 				return ret;
 			}
 			bool valid() const {return true;}
@@ -63,6 +63,7 @@ namespace mutils{
 							if (receivers.count(id) > 0) {
 								//std::cout << "receiver ready, receiving message" << std::endl;
 								auto &p = receivers.at(id);
+								l.unlock();
 								conn.bytes_sent = &p.bytes_sent;
 								//std::cout << " message sizes: ";
 								//for (auto &s : p.next_expected_size)

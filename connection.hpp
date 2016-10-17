@@ -52,11 +52,16 @@ struct connection{
 
 	template<typename> using make_these_ints = int;
 
-	template<typename Fst, typename... Rst>
+	template<typename Fst>
+	auto receive_helper(DeserializationManager* dsm, void** recv, int indx = 0){
+		return std::make_tuple(from_bytes<Fst>(dsm,(char*)recv[indx]));
+	}
+
+	template<typename Fst, typename Snd, typename... Rst>
 	auto receive_helper(DeserializationManager* dsm, void** recv, int indx = 0){
 		return std::tuple_cat(
 			std::make_tuple(from_bytes<Fst>(dsm,(char*)recv[indx])),
-			receive_helper<Rst...>(dsm,recv,indx+1));
+			receive_helper<Snd,Rst...>(dsm,recv,indx+1));
 	}
 	
 	template<typename T1, typename... T2>
@@ -78,7 +83,7 @@ struct connection{
 		void** _recv = recv;
 		std::size_t size_buf[] = {size};
 		raw_receive(1 ,size_buf,_recv);
-		return std::get<0>(receive_helper<T>(dsm,recv));
+		return from_bytes<T>(dsm,(char*) recv[0]);
 	}
 
 	template<typename T>
@@ -88,10 +93,10 @@ struct connection{
 	}
 
 	template<typename... T>
-	void send(const T&... t){
+	auto send(const T&... t){
 		std::size_t sizes[] = {bytes_size(t)...};
 		void *bufs[] = {to_bytes_helper(t,alloca(bytes_size(t)))...};
-		raw_send(sizeof...(T),sizes,bufs);
+		return raw_send(sizeof...(T),sizes,bufs);
 	}
 
 	auto receive(std::size_t size, void *data){
