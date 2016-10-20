@@ -6,7 +6,7 @@
 
 using namespace mutils;
 using namespace std;
-namespace conn_space = mutils::proxy_connection;
+namespace conn_space = mutils::batched_connection;
 
 
 int main(int argc, char* argv[]){
@@ -80,10 +80,9 @@ int main(int argc, char* argv[]){
 				}}.loop_until_false_set();
 		}};
 	sleep(1);
-	conn_space::connections bc(decode_ip("127.0.0.1"),portno,MAX_THREADS/2);
-	using connection = conn_space::locked_connection;
+	conn_space::connections bc(decode_ip("127.0.0.1"),portno,1);
+	using connection = conn_space::connection;
 
-	std::function<void (const connection&) > looper;
 	std::map<int, connection> connections;
 	struct debug_info{
 		int my_msg;
@@ -107,7 +106,8 @@ int main(int argc, char* argv[]){
 			auto my_msg = index;
 			if (my_msg %50 == 0) std::cout << "on message " << my_msg << std::endl;
 			connections.emplace(my_msg,bc.spawn());
-			GlobalPool::inst.push([wc = connections.at(my_msg).weak(),
+			auto *c = &connections.at(my_msg);
+			GlobalPool::inst.push([c,
 								   &total_time,
 								   &event_counts,
 								   &total_events,
@@ -116,19 +116,20 @@ int main(int argc, char* argv[]){
 								   my_msg](int) mutable
 								  {
 					for(unsigned int i = 0; true; ++i){
-						event_counts.at(my_msg) = high_resolution_clock::now();
+						time_t old_time = event_counts.at(my_msg).load();
+						auto now = high_resolution_clock::now();
+						assert(now - old_time < 30s);
+						event_counts.at(my_msg) = now;
 						auto average = total_time / (total_events + 1.0);
 						//auto outlier10_average = outlier10_count / (total_events + 1.0);
 						//auto outlier100_average = outlier100_count / (total_events + 1.0);
 						auto start = high_resolution_clock::now();
 						int receipt{-1};
-						{
-							auto c = wc.lock();
-							c->send(my_msg);
-							//std::cout << "sending initial message" << std::endl;
-							c->receive(receipt);
-							//std::cout << "received initial message reply" << std::endl;
-						}
+						c->send(my_msg);
+						//std::cout << "sending initial message" << std::endl;
+						c->receive(receipt);
+						//std::cout << "received initial message reply" << std::endl;
+
 						auto end = high_resolution_clock::now();
 						{
 							std::vector<unsigned char> my_other_message;
@@ -173,11 +174,11 @@ int main(int argc, char* argv[]){
 						}
 						auto duration = (end - start);
 						int num_behind = 0;
-						if (i % 2000 == 0) {
+						if (i % 20000 == 0) {
 							if (total_events > 0) std::cout << duration_cast<microseconds>(average).count() << std::endl;
 							//std::cout << outlier100_average << std::endl;
 							for (const auto &indx : event_counts){
-								if ((start - indx.second.load()) > 6s){
+								if ((start - indx.second.load()) > 10s){
 									++num_behind;
 								}
 							}
@@ -198,7 +199,6 @@ int main(int argc, char* argv[]){
 					}
 				});
 		}
-		connections.clear();
 	}
 	catch (const debug_info& exn){
 		std::cerr << "message error: " << exn.my_msg << " : " << exn.receipt << std::endl;

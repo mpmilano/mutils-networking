@@ -20,14 +20,12 @@ namespace mutils{
 			return s.raw_send(how_many+1,sizes,bufs) - sizes[0];
 		}
 		
-		connections::connections(const int ip, const int port, const int max_connections)
-			:sp(max_connections / 2,max_connections / 2,[ip,port]{
-					return new connection{ip,port};
-				}){}
+		connections::connections(const int ip, const int port, const int)
+			:ip(ip),port(port){}
 		
 		
-		locked_connection connections::spawn(){
-			return sp.acquire();
+		connection connections::spawn(){
+			return connection{ip,port};
 		}
 
 		//BEGIN RECEIVER CODE

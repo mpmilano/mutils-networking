@@ -17,9 +17,6 @@ namespace mutils {
 		struct incoming_message_queue{
 			std::list<buf_ptr> queue;
 			std::mutex queue_lock;
-			std::atomic<std::chrono::high_resolution_clock::time_point> last_used
-				{std::chrono::high_resolution_clock::now()};
-			std::size_t receive_count{0};
 		};
 
 		/** Maintains the message queues for all logical connections
@@ -28,9 +25,7 @@ namespace mutils {
 		struct SocketBundle {
 			Socket sock;
 			std::map<std::size_t,incoming_message_queue> incoming;
-			std::mutex socket_lock;
-			//std::atomic<std::size_t> use_count{0};
-			std::atomic<std::size_t> &bytes_received;
+			std::mutex socket_lock;;
 
 			//represents a partial message whose
 			//destination is not currently known
@@ -51,36 +46,17 @@ namespace mutils {
 			//invariant: not in use, of non-zero size.
 			buf_ptr spare{BufGen::allocate()};
 			
-			SocketBundle(Socket sock, std::atomic<std::size_t> &b)
-				:sock(sock),bytes_received(b){}
+			SocketBundle(Socket sock)
+				:sock(sock){}
 			SocketBundle(const SocketBundle&) = delete;
 			SocketBundle(SocketBundle&&) = delete;
 		};
 		
 		struct connection : public ::mutils::connection {
 			SocketBundle& sock;
-
-			/*
-			void onAcquire(...){
-				++sock.use_count;
-				{ 
-					my_queue = &sock.incoming[id];
-				}
-			}
-
-			void onRelease(){
-				--sock.use_count;
-				{
-					assert(my_queue->queue.size() == 0);
-					sock.incoming.erase(id);
-				}
-			}
-			*/
 			
 			const std::size_t id;
-			void* bonus_item{nullptr};
-			incoming_message_queue* my_queue{nullptr};
-			//use this if there's nothing left over.
+			incoming_message_queue &my_queue;
 			connection(SocketBundle& s, std::size_t id);
 			operator bool() const {return valid();}
 			connection(const connection&) = delete;
@@ -106,10 +82,6 @@ namespace mutils {
 			}
 		};
 
-		using SocketPool = ResourcePool<connection>;
-		using locked_connection = typename SocketPool::LockedResource;
-		using weak_connection = typename SocketPool::WeakResource;
-		
 		/** Number of logical connections per physical connection. */
 		static const constexpr std::size_t connection_factor = 8;
 		
@@ -124,15 +96,8 @@ namespace mutils {
 			connections(const int ip, const int port, const int max_connections);
 			
 			connections(const connections&) = delete;
-
-			std::vector<std::size_t> abandoned_conections(const std::chrono::microseconds& d, bool = false);
 			
-			template<typename duration>
-			std::vector<std::size_t> abandoned_conections(const duration& d){
-				return abandoned_conections(std::chrono::duration_cast<std::chrono::microseconds>(d),false);
-			}
-			
-			locked_connection spawn();
+			connection spawn();
 			~connections();
 		};
 
@@ -143,8 +108,6 @@ namespace mutils {
 		//the action funciton is called.  There is a unique action function
 		//(produced by a separate call to new_connection) per logical connection.
 		struct receiver {
-
-			std::atomic<std::size_t> bytes_sent{0};
 			
 			//returns expected next message size
 			struct connection;
@@ -160,7 +123,6 @@ namespace mutils {
 			struct action_items {
 				action_t action;
 				std::unique_ptr<std::mutex> mut{new std::mutex()};
-				std::size_t bytes_sent{0};
 				action_items() = default;
 				action_items(action_t a)
 					:action(std::move(a)){}

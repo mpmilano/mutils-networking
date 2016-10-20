@@ -35,17 +35,14 @@ namespace mutils{
 			}
 			
 		};
-		
-		using SocketPool = ResourcePool<connection>;
-		using locked_connection = typename SocketPool::LockedResource;
-		using weak_connection = typename SocketPool::WeakResource;
-		
+
 		
 		struct connections {
-			SocketPool sp;
+			const int ip;
+			const int port;
 			connections(const int ip, const int port, const int);
 			connections(const connections&) = delete;
-			locked_connection spawn();
+			connection spawn();
 			template<typename d>
 			std::vector<std::size_t> abandoned_conections(const d&){return std::vector<std::size_t>();}
 		};

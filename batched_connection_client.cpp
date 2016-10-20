@@ -17,73 +17,22 @@ namespace mutils{
 		const std::size_t modulus = (max_connections > connection_factor ?
 									  max_connections / connection_factor :
 									  1);
-		std::mutex launch_lock;
-		std::atomic<std::size_t> current_connections{0};
-		SocketPool rp;
+		std::atomic<std::size_t> current_connection_id{0};
 		std::vector<std::unique_ptr<SocketBundle> > bundles{modulus};
-		bool init_done{false};
-		std::atomic<std::size_t> bytes_received{0};
-		
-		~batched_connections_impl(){
-			std::cerr << "CLIENT BYTES RECEIVED: " << bytes_received << std::endl;
-			for (const auto &v : bundles){
-				for (const auto &p : v->incoming){
-					std::cout << p.first << ":" << p.second.receive_count << " ";
-				}
-			}
-			std::cout << std::endl;
-		}
 
-		vector<size_t> abandoned_conections(const microseconds &ms){
-			vector<size_t> ret;
-			for (const auto &bundle : bundles){
-				for (const auto& queue : bundle->incoming){
-					if ((high_resolution_clock::now() - queue.second.last_used.load()) > ms)
-						ret.push_back(queue.first);
-				}
-			}
-			return ret;
-		}
-		
-		connection* new_resource(){
-			using namespace std::chrono;
-			assert(!init_done);
-			const std::size_t id = current_connections;
-			auto index = id % (modulus);
-			assert(index < bundles.size());
-			auto &bundle = bundles.at(index);
-			if (!bundle){
-				std::unique_lock<mutex> l{launch_lock};
-				if (!bundle){
-					bundle.reset(new SocketBundle{Socket::connect(ip,port).set_timeout(10s),bytes_received});
-				}
-			}
-			++current_connections;
-			//don't overflow
-			assert(current_connections > id);
-			return new connection{*bundle,id};
-		}
 		batched_connections_impl(const int ip, const int port, const int max_connections)
 			:ip(ip),
 			 port(port),
-			 max_connections(max_connections),
-			 rp(modulus,max_connections - modulus,std::bind(&batched_connections_impl::new_resource,this)){
-			//std::cout << "beginning pre-init" << std::endl;
-			//pre-init all the connections
-			std::function<void (const locked_connection&, std::size_t)> init_all;
-			auto keep_for_now = std::make_unique<std::list<locked_connection> >();
-
-			for (std::size_t ind = 0; ind < this->max_connections; ++ind){
-				keep_for_now->emplace_back(this->rp.acquire());
+			 max_connections(max_connections){
+			for (auto &bundle : bundles){
+				bundle.reset(new SocketBundle{Socket::connect(ip,port).set_timeout(10s)});
 			}
-			init_done = true;
-			//std::cout << "pre-init done" << std::endl;
 		}
 	};
 
 
 		connection::connection(SocketBundle &s, std::size_t id)
-			:sock(s),id(id),my_queue(&s.incoming[id]){}
+			:sock(s),id(id),my_queue(s.incoming[id]){}
 
 		void connection::process_data (std::unique_lock<std::mutex> sock_lock, buf_ptr _payload, std::size_t payload_size)
 		{
@@ -117,11 +66,8 @@ namespace mutils{
 					auto &queue = sock.incoming.at(id);
 					std::unique_lock<std::mutex> l{queue.queue_lock};
 					//this is the right client.  give it the part after the header.
-					queue.queue.emplace_back(payload->split(hdr_size)); 
-					queue.last_used = std::chrono::high_resolution_clock::now();
+					queue.queue.emplace_back(payload->split(hdr_size));
 					payload = &queue.queue.back();
-					auto recv_count_size = queue.queue.back().size();
-					queue.receive_count += recv_count_size;
 					auto leftover = payload->split(size);
 					l.unlock();
 					if (payload_size > size + hdr_size){
@@ -153,7 +99,6 @@ namespace mutils{
 			try {
 				recv_size = sock.sock.drain(into.size() - offset,
 											into.payload + offset);
-				sock.bytes_received += recv_size;
 				assert(into_size >= recv_size);
 			}
 			catch (const Timeout&){
@@ -165,11 +110,10 @@ namespace mutils{
 		std::size_t connection::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
 			const auto expected_size = total_size(how_many, sizes);
 			while (true){
-				if (my_queue->queue.size() > 0){
-					std::unique_lock<std::mutex> l{my_queue->queue_lock};
-					my_queue->last_used = std::chrono::high_resolution_clock::now();
-					auto msg = std::move(my_queue->queue.front());
-					my_queue->queue.pop_front();
+				if (my_queue.queue.size() > 0){
+					std::unique_lock<std::mutex> l{my_queue.queue_lock};
+					auto msg = std::move(my_queue.queue.front());
+					my_queue.queue.pop_front();
 					if (msg.size() != expected_size){
 						std::cerr << msg.size() << std::endl;
 						std::cerr << expected_size << std::endl;
@@ -182,7 +126,7 @@ namespace mutils{
 					std::unique_lock<std::mutex> l{sock.socket_lock};
 					//retest condition - someone might have found us a message!
 					//this will implicitly drop the lock.
-					if (my_queue->queue.size() > 0) continue;
+					if (my_queue.queue.size() > 0) continue;
 					assert(sock.spare.payload || sock.orphans);
 					const auto real_expected = expected_size + hdr_size;
 					if (sock.orphans){
@@ -218,7 +162,6 @@ namespace mutils{
 		}
 		
 		std::size_t connection::raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs){
-			my_queue->last_used = std::chrono::high_resolution_clock::now();
 			return send_with_id(sock.sock,id,how_many,sizes,bufs,total_size(how_many, sizes));
 		}
 
@@ -232,12 +175,10 @@ namespace mutils{
 			delete i;
 		}
 		
-		locked_connection connections::spawn(){
-			return i->_this.rp.acquire();
-		}
-
-		std::vector<std::size_t> connections::abandoned_conections(const std::chrono::microseconds &d, bool){
-			return i->_this.abandoned_conections(d);
+		connection connections::spawn(){
+			auto &_i = i->_this;
+			auto my_id = ++_i.current_connection_id;
+			return connection{*_i.bundles.at(my_id% _i.modulus),my_id};
 		}
 
 		connections::connections(const int ip, const int port, const int max_connections)
