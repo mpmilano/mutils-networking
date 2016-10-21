@@ -57,7 +57,7 @@ namespace mutils {
 			
 			const std::size_t id;
 			incoming_message_queue &my_queue;
-			connection(SocketBundle& s, std::size_t id);
+			connection(SocketBundle& s, std::size_t id, unsigned int mask);
 			operator bool() const {return valid();}
 			connection(const connection&) = delete;
 			connection(connection&&) = default;
@@ -90,10 +90,11 @@ namespace mutils {
 		 */
 		struct connections {
 			struct Internals;
+			static_assert(sizeof(int)*2 <= sizeof(std::size_t),"Error: assumed two ints fit in size_t");
 			Internals *i;
 			
 			//connect to a server at address IP and port PORT, and open max_connections logical connections.
-			connections(const int ip, const int port, const int max_connections);
+			connections(const int ip, const int port, const int max_connections, const unsigned int my_prefix);
 			
 			connections(const connections&) = delete;
 			

@@ -13,6 +13,7 @@ namespace mutils{
 	struct batched_connections_impl {
 		const int ip;
 		const int port;
+		const unsigned int my_prefix;
 		const std::size_t max_connections;
 		const std::size_t modulus = (max_connections > connection_factor ?
 									  max_connections / connection_factor :
@@ -20,10 +21,12 @@ namespace mutils{
 		std::atomic<std::size_t> current_connection_id{0};
 		std::vector<std::unique_ptr<SocketBundle> > bundles{modulus};
 
-		batched_connections_impl(const int ip, const int port, const int max_connections)
+		batched_connections_impl(const int ip, const int port, const int max_connections, const unsigned int my_prefix)
 			:ip(ip),
 			 port(port),
-			 max_connections(max_connections){
+			 my_prefix(my_prefix),
+			 max_connections(max_connections)
+			{
 			for (auto &bundle : bundles){
 				bundle.reset(new SocketBundle{Socket::connect(ip,port).set_timeout(10s)});
 			}
@@ -31,8 +34,9 @@ namespace mutils{
 	};
 
 
-		connection::connection(SocketBundle &s, std::size_t id)
-			:sock(s),id(id),my_queue(s.incoming[id]){}
+		static_assert((std::size_t{2147483647} << sizeof(int)*8 ) >> sizeof(int)*8 == 2147483647, "Error; shifting logic wrong");
+		connection::connection(SocketBundle &s, std::size_t _id, unsigned int mask)
+			:sock(s),id(_id & (std::size_t{mask} << sizeof(int)*8) ),my_queue(s.incoming[id]){}
 
 		void connection::process_data (std::unique_lock<std::mutex> sock_lock, buf_ptr _payload, std::size_t payload_size)
 		{
@@ -167,8 +171,8 @@ namespace mutils{
 
 		struct connections::Internals{
 			batched_connections_impl _this;
-			Internals(const int ip, const int port, const int max_connections)
-				:_this(ip,port,max_connections){}
+			Internals(const int ip, const int port, const int max_connections, const unsigned int my_prefix)
+				:_this(ip,port,max_connections,my_prefix){}
 		};
 		
 		connections::~connections(){
@@ -178,11 +182,11 @@ namespace mutils{
 		connection connections::spawn(){
 			auto &_i = i->_this;
 			auto my_id = ++_i.current_connection_id;
-			return connection{*_i.bundles.at(my_id% _i.modulus),my_id};
+			return connection{*_i.bundles.at(my_id% _i.modulus),my_id, _i.my_prefix};
 		}
 
-		connections::connections(const int ip, const int port, const int max_connections)
-			:i(new Internals(ip,port,max_connections)){}
+		connections::connections(const int ip, const int port, const int max_connections, const unsigned int my_prefix)
+			:i(new Internals(ip,port,max_connections, my_prefix)){}
 	
 	}
 }

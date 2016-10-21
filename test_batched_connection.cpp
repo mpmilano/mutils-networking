@@ -80,7 +80,7 @@ int main(int argc, char* argv[]){
 				}}.loop_until_false_set();
 		}};
 	sleep(1);
-	conn_space::connections bc(decode_ip("127.0.0.1"),portno,1);
+	conn_space::connections bc(decode_ip("127.0.0.1"),portno,1,0);
 	using connection = conn_space::connection;
 
 	std::map<int, connection> connections;
