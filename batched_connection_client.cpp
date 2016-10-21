@@ -36,7 +36,7 @@ namespace mutils{
 
 		static_assert((std::size_t{2147483647} << sizeof(int)*8 ) >> sizeof(int)*8 == 2147483647, "Error; shifting logic wrong");
 		connection::connection(SocketBundle &s, std::size_t _id, unsigned int mask)
-			:sock(s),id(_id & (std::size_t{mask} << sizeof(int)*8) ),my_queue(s.incoming[id]){}
+			:sock(s),id(_id | (std::size_t{mask} << sizeof(int)*8) ),my_queue(s.incoming[id]){}
 
 		void connection::process_data (std::unique_lock<std::mutex> sock_lock, buf_ptr _payload, std::size_t payload_size)
 		{
