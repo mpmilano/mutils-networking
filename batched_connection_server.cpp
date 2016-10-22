@@ -55,8 +55,6 @@ namespace mutils{
 						}
 						{
 							//std::cout << "locking for receipt" << std::endl;
-							//this is a "read" acquire, for a reader-writer lock
-							std::shared_lock<std::shared_mutex> l{map_lock};
 							if (receivers.count(id) > 0) {
 								//std::cout << "receiver ready, receiving message" << std::endl;
 								auto &p = receivers.at(id);
