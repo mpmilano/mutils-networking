@@ -58,7 +58,6 @@ namespace mutils{
 							if (receivers.count(id) > 0) {
 								//std::cout << "receiver ready, receiving message" << std::endl;
 								auto &p = receivers.at(id);
-								l.unlock();
 								//std::cout << " message sizes: ";
 								//for (auto &s : p.next_expected_size)
 								//std::cout << s << " ";
