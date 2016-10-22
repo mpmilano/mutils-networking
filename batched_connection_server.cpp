@@ -35,6 +35,7 @@ namespace mutils{
 
 		void receiver::on_accept(bool& alive, Socket s){
 			//std::cout << "beginning accept loop" << std::endl;
+			std::map<std::size_t,  action_items> receivers;
 			try { 
 				while (alive) {
 					//std::cout << "looping " << std::endl;
@@ -49,7 +50,6 @@ namespace mutils{
 						while (need_new_entry){
 							//std::cout << "generating new entry" << std::endl;
 							need_new_entry = false;
-							std::unique_lock<std::shared_mutex> l{map_lock};
 							auto &elem = receivers[id];
 							elem.action = new_connection();
 						}

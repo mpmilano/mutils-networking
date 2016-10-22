@@ -136,8 +136,6 @@ namespace mutils {
 			
 			new_connection_t new_connection;
 
-			std::shared_mutex map_lock;
-			std::map<std::size_t,  action_items> receivers;
 			AcceptConnectionLoop acl;
 
 			void on_accept(bool& alive, Socket s);
