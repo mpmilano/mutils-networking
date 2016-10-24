@@ -57,7 +57,7 @@ namespace mutils {
 			
 			const std::size_t id;
 			incoming_message_queue &my_queue;
-			connection(SocketBundle& s, std::size_t id, unsigned int mask);
+			connection(SocketBundle& s, std::size_t id);
 			operator bool() const {return valid();}
 			connection(const connection&) = delete;
 			connection(connection&&) = default;
@@ -94,7 +94,7 @@ namespace mutils {
 			Internals *i;
 			
 			//connect to a server at address IP and port PORT, and open max_connections logical connections.
-			connections(const int ip, const int port, const int max_connections, const unsigned int my_prefix);
+			connections(const int ip, const int port, const int max_connections);
 			
 			connections(const connections&) = delete;
 			
