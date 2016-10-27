@@ -11,7 +11,7 @@ namespace mutils {
 
 		struct batched_connections_impl;
 		using BufGen = BufferGenerator<4096*8*8>;
-		using buf_ptr = struct BufGen::pointer;
+		using buf_ptr = BufGen::pointer;
 		static const constexpr std::size_t hdr_size = 2*sizeof(std::size_t);
 		
 		struct incoming_message_queue{
@@ -123,13 +123,10 @@ namespace mutils {
 			//perform.  
 			struct action_items {
 				action_t action;
-				std::unique_ptr<std::mutex> mut{new std::mutex()};
+				std::mutex mut;
 				action_items() = default;
 				action_items(action_t a)
 					:action(std::move(a)){}
-				action_items(action_items&& o)
-					:action(std::move(o.action)),
-					 mut(std::move(o.mut)){}
 			};
 
 			using new_connection_t = std::function<action_t () >;

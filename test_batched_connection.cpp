@@ -1,12 +1,11 @@
 #include "batched_connection.hpp"
 #include "simple_rpc.hpp"
-#include "proxy_connection.hpp"
 #include "GlobalPool.hpp"
 #include <unistd.h>
 
 using namespace mutils;
 using namespace std;
-namespace conn_space = mutils::batched_connection;
+namespace conn_space = mutils::simple_rpc;
 
 
 int main(int argc, char* argv[]){
@@ -80,7 +79,7 @@ int main(int argc, char* argv[]){
 				}}.loop_until_false_set();
 		}};
 	sleep(1);
-	conn_space::connections bc(decode_ip("127.0.0.1"),portno,1,0);
+	conn_space::connections bc(decode_ip("127.0.0.1"),portno,MAX_THREADS/2);
 	using connection = conn_space::connection;
 
 	std::map<int, connection> connections;
@@ -91,13 +90,12 @@ int main(int argc, char* argv[]){
 	using namespace std::chrono;
 	using time_t = decltype(high_resolution_clock::now());
 	using duration_t =
-		std::decay_t<decltype(high_resolution_clock::now() -
-							  high_resolution_clock::now())>;
+		std::decay_t<decltype(std::declval<time_t>() - std::declval<time_t>() )>;
 	unsigned long long total_events{0};
 	unsigned long long outlier10_count{0};
 	unsigned long long outlier100_count{0};
-	std::map<int, std::atomic<time_t> > event_counts;
-	for (int index = 0; index < MAX_THREADS/2; ++index) event_counts[index] = high_resolution_clock::now();
+	//std::map<int, volatile time_t > event_counts;
+	//for (int index = 0; index < MAX_THREADS/2; ++index) event_counts.emplace(index,  high_resolution_clock::now());
 	duration_t total_time{0};
 	try {
 		//randomly generate lenghts,
@@ -109,17 +107,16 @@ int main(int argc, char* argv[]){
 			auto *c = &connections.at(my_msg);
 			GlobalPool::inst.push([c,
 								   &total_time,
-								   &event_counts,
 								   &total_events,
 								   &outlier10_count,
 								   &outlier100_count,
 								   my_msg](int) mutable
 								  {
 					for(unsigned int i = 0; true; ++i){
-						time_t old_time = event_counts.at(my_msg).load();
+						/*time_t old_time = event_counts.at(my_msg);
 						auto now = high_resolution_clock::now();
 						assert(now - old_time < 30s);
-						event_counts.at(my_msg) = now;
+						event_counts.at(my_msg) = now;//*/
 						auto average = total_time / (total_events + 1.0);
 						//auto outlier10_average = outlier10_count / (total_events + 1.0);
 						//auto outlier100_average = outlier100_count / (total_events + 1.0);
@@ -135,6 +132,7 @@ int main(int argc, char* argv[]){
 							std::vector<unsigned char> my_other_message;
 							const std::size_t other_message_size = (better_rand()*50) + 1;
 							assert(other_message_size > 0);
+							assert(other_message_size < 51);
 							const unsigned char max_uchar = std::numeric_limits<unsigned char>::max();
 							for (std::size_t i = 0; i < other_message_size; ++i){
 								my_other_message.push_back(better_rand() * max_uchar);
@@ -173,16 +171,17 @@ int main(int argc, char* argv[]){
 							assert(has_been_off || (my_other_message.size() == 0));
 						}
 						auto duration = (end - start);
-						int num_behind = 0;
 						if (i % 20000 == 0) {
 							if (total_events > 0) std::cout << duration_cast<microseconds>(average).count() << std::endl;
 							//std::cout << outlier100_average << std::endl;
+							/*
+							int num_behind = 0;
 							for (const auto &indx : event_counts){
 								if ((start - indx.second.load()) > 10s){
 									++num_behind;
 								}
 							}
-							if (num_behind > 0) std::cout << num_behind << std::endl;
+							if (num_behind > 0) std::cout << num_behind << std::endl;//*/
 						}
 						if (i > 10000){
 							if (duration > 10*average) ++outlier10_count;

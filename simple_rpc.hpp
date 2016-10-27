@@ -21,12 +21,13 @@ namespace mutils{
 			using ::mutils::connection::send;
 			
 			template<typename... T> auto receive(T&& ... t){
-				::mutils::connection::connection& _this = *this;
+				using this_t = ::mutils::connection;
+				this_t& _this = *this;
 				return _this.receive(std::forward<T>(t)...);
 			}
 			
 			template<typename... T> auto send(T&& ... t){
-				::mutils::connection::connection& _this = *this;
+				::mutils::connection& _this = *this;
 				return _this.send(std::forward<T>(t)...);
 			}
 
