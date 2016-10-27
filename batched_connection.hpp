@@ -108,6 +108,12 @@ namespace mutils {
 		//which must return action functions.  On receipt of a message,
 		//the action funciton is called.  There is a unique action function
 		//(produced by a separate call to new_connection) per logical connection.
+
+		struct ReceiverFun {
+			virtual void operator()(const void*, ::mutils::connection&) = 0;
+			virtual ~ReceiverFun(){}
+		};
+		
 		struct receiver {
 			
 			//returns expected next message size
@@ -115,8 +121,7 @@ namespace mutils {
 			// physical TCP port
 			const int port;
 			//function to call when new messages come in.
-			using action_t =
-				std::function<void (void*, ::mutils::connection&)>;
+			using action_t = std::unique_ptr<ReceiverFun>;
 
 			//Represents  a logical connection; consider it an
 			//"instance" of the action that this receiver is set up to

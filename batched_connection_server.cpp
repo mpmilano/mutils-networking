@@ -63,7 +63,7 @@ namespace mutils{
 						 conn = connection{s,id},
 						 l = std::unique_lock<std::mutex>{p.mut}
 							](int) mutable
-						{p.action(recv_buf.data(),conn);}
+						{(*p.action)(recv_buf.data(),conn);}
 						);
 					//std::cout << "action performed" << std::endl;
 				}
