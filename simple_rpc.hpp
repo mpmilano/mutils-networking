@@ -37,6 +37,10 @@ namespace mutils{
 			
 		};
 
+		struct ReceiverFun {
+			virtual void operator()(const void*, ::mutils::connection&) = 0;
+			virtual ~ReceiverFun(){}
+		};
 		
 		struct connections {
 			const int ip;
@@ -49,8 +53,7 @@ namespace mutils{
 		};
 		
 		struct receiver {
-			using action_t =
-				std::function<void (void*, ::mutils::connection&)>;
+			using action_t = std::unique_ptr<ReceiverFun>;
 			
 			const int listen;
 			

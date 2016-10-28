@@ -38,19 +38,19 @@ int main(int argc, char* argv[]){
 	std::thread receiver{[&]{
 			conn_space::receiver{portno,[]{
 					//std::cout << "receiver triggered" << std::endl;
-					return action_t{
-						[on_first_message = std::make_shared<bool>(true),
-						 assert_single_threaded = std::make_shared<std::mutex>()]
-							(const void* inbnd, connection& c) -> void{
-							bool success = assert_single_threaded->try_lock();
+					struct ReceiverFun : public conn_space::ReceiverFun {
+						bool on_first_message{true};
+						std::mutex assert_single_threaded;
+						void operator()(const void* inbnd, connection& c) {
+							bool success = assert_single_threaded.try_lock();
 							assert(success);
-							AtScopeEnd ase{[&]{assert_single_threaded->unlock();}};
+							AtScopeEnd ase{[&]{assert_single_threaded.unlock();}};
 							//std::cout << "received message" << std::endl;
-							if (*on_first_message){
+							if (on_first_message){
 								//std::cout << "expected this message is size_t" << std::endl;
 								int rcv = *((int*)(inbnd));
 								c.send(rcv);
-								*on_first_message = false;
+								on_first_message = false;
 							}
 							else{
 								//std::cout << "expected this message is vector" << std::endl;
@@ -73,9 +73,11 @@ int main(int argc, char* argv[]){
 									ss << "sending " << c.send(*received) << " bytes of vector back" << std::endl;
 									//std::cout << ss.str();
 								}
-								*on_first_message = true;
+								on_first_message = true;
 							}
-						}};
+						}
+					};
+					return action_t{new ReceiverFun{}};
 				}}.loop_until_false_set();
 		}};
 	sleep(1);

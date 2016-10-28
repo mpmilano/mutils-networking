@@ -45,7 +45,7 @@ namespace mutils{
 					char buf[size];
 					void* buf_p = &buf;
 					s.raw_receive(1,&size,&buf_p);
-					processor(buf,s);
+					(*processor)(buf,s);
 				}
 			}}
             {}
