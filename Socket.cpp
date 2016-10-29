@@ -25,16 +25,6 @@ namespace mutils{
 	bool Socket::valid() const {
 		return i && i->sockID > 0;
 	}
-
-	int Socket::underlying_fd() {
-		return i->sockID;
-	}
-	
-	int Socket::release() {
-		auto rel = i->sockID;
-		i->sockID = 0;
-		return rel;
-	}
 	
 	Socket::Socket(int ip, int portno){
 		int sockfd;

@@ -5,9 +5,6 @@
 #include <shared_mutex>
 #include "ServerSocket.hpp"
 #include "buffer_generator.hpp"
-#include "readerwriterqueue.h"
-#include "better_constructable_array.hpp"
-#include "epoll.hpp"
 
 namespace mutils {
 	namespace batched_connection {
@@ -86,7 +83,7 @@ namespace mutils {
 		};
 
 		/** Number of logical connections per physical connection. */
-		static const constexpr std::size_t connection_factor = 1;
+		static const constexpr std::size_t connection_factor = 8;
 		
 		/** Manages a set of logical TCP connections over a smaller set of physical TCP
 		 *  connections.
@@ -121,6 +118,8 @@ namespace mutils {
 			
 			//returns expected next message size
 			struct connection;
+			// physical TCP port
+			const int port;
 			//function to call when new messages come in.
 			using action_t = std::unique_ptr<ReceiverFun>;
 
@@ -129,51 +128,23 @@ namespace mutils {
 			//perform.  
 			struct action_items {
 				action_t action;
+				std::mutex mut;
 				action_items() = default;
 				action_items(action_t a)
 					:action(std::move(a)){}
-			};
-
-			struct receiver_state{
-				std::map<std::size_t,  std::unique_ptr<action_items> > receivers;
-				Socket s;
-				receiver &super;
-				void tick();
-				receiver_state(Socket s, receiver &super);
-				int underlying_fd() {return s.underlying_fd();}
-				receiver_state& operator=(receiver_state&&);
-				receiver_state(receiver_state&& o);
 			};
 
 			using new_connection_t = std::function<action_t () >;
 			
 			new_connection_t new_connection;
 
-			const int port;
-			bool alive{true};
+			AcceptConnectionLoop acl;
 
-			constexpr static unsigned char thread_count = 16;
-			struct receiver_thread{
-				receiver &super;
-				EPoll<receiver_state> epoll_obj;
-				receiver_thread(receiver& super)
-					:super(super){}
-				moodycamel::ReaderWriterQueue<std::unique_ptr<receiver_state> > active_sockets;
-				void tick_one();
-				std::thread this_thread{
-					[&]{while (super.alive)
-							tick_one();
-					}
-				};
-			};
-				
-			array<receiver_thread, thread_count, receiver&> active_sockets;
-			void acceptor_fun();
+			void on_accept(bool& alive, Socket s);
+
+			void loop_until_false_set();
 
 			receiver(int port, new_connection_t new_connection);
-			template<std::size_t... indices>
-			receiver(std::index_sequence<indices...> const * const,
-					 int port, new_connection_t new_connection);
 			~receiver();
 		};
 	}

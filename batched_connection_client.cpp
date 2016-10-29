@@ -180,7 +180,6 @@ namespace mutils{
 		connection connections::spawn(){
 			auto &_i = i->_this;
 			auto my_id = ++_i.current_connection_id;
-			assert(my_id < _i.max_connections);
 			return connection{*_i.bundles.at(my_id% _i.modulus),my_id};
 		}
 

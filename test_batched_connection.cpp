@@ -5,7 +5,7 @@
 
 using namespace mutils;
 using namespace std;
-namespace conn_space = mutils::batched_connection;
+namespace conn_space = mutils::simple_rpc;
 
 
 int main(int argc, char* argv[]){
@@ -78,7 +78,7 @@ int main(int argc, char* argv[]){
 						}
 					};
 					return action_t{new ReceiverFun{}};
-				}}.acceptor_fun();
+				}}.loop_until_false_set();
 		}};
 	sleep(1);
 	conn_space::connections bc(decode_ip("127.0.0.1"),portno,MAX_THREADS/2);
