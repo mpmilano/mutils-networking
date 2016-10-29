@@ -49,6 +49,12 @@ namespace mutils{
 		static Socket connect(int ip, int port);
 		
 		bool valid() const;
+
+		//return the underlying file descriptor
+		int underlying_fd();
+		//return the underlying file descriptor, and
+		//set this socket's internal file descriptor to 0
+		int release();
 		
 		std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
 		template<typename duration>
