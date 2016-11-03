@@ -180,7 +180,10 @@ namespace mutils{
 		connection connections::spawn(){
 			auto &_i = i->_this;
 			auto my_id = ++_i.current_connection_id;
-			return connection{*_i.bundles.at(my_id% _i.modulus),my_id};
+			auto &my_socket = _i.bundles.at(my_id% _i.modulus);
+			std::size_t conn_id = my_socket->unused_id;
+			++my_socket->unused_id;
+			return connection{*my_socket,conn_id};
 		}
 
 		connections::connections(const int ip, const int port, const int max_connections)

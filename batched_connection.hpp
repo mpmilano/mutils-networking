@@ -24,6 +24,7 @@ namespace mutils {
 		 */
 		struct SocketBundle {
 			Socket sock;
+			std::atomic_int unused_id{0};
 			std::map<std::size_t,incoming_message_queue> incoming;
 			std::mutex socket_lock;;
 
