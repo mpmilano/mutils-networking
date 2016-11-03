@@ -105,11 +105,15 @@ namespace mutils{
 			assert(into_size > offset);
 			size_type recv_size{0};
 			try {
+				log_file << "waiting on network" << std::endl;
+				log_file.flush();
 				recv_size = sock.sock.drain(into.size() - offset,
 											into.payload + offset);
 				assert(into_size >= recv_size);
 			}
 			catch (const Timeout&){
+				log_file << "network timeout; checking queue again" << std::endl;
+				log_file.flush();
 				throw ResourceReturn{std::move(l), std::move(into)};
 			}
 			process_data(std::move(l),std::move(into),recv_size + offset);
@@ -128,9 +132,14 @@ namespace mutils{
 					}
 					assert(msg.size() == expected_size);
 					copy_into(how_many,sizes,bufs,(char*)msg.payload);
+					log_file << "found message of size " << msg.size() << " (expected " << expected_size << ") "
+							 << "waiting in incoming queue" << std::endl;
+					log_file.flush();
 					return expected_size;
 				}
 				else {
+					log_file << "waiting on lock" << std::endl;
+					log_file.flush();
 					std::unique_lock<std::mutex> l{sock.socket_lock};
 					//retest condition - someone might have found us a message!
 					//this will implicitly drop the lock.
@@ -170,7 +179,7 @@ namespace mutils{
 		}
 		
 		std::size_t connection::raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs){
-			return send_with_id(sock.sock,id,how_many,sizes,bufs,total_size(how_many, sizes));
+			return send_with_id(log_file,sock.sock,id,how_many,sizes,bufs,total_size(how_many, sizes));
 		}
 
 		struct connections::Internals{
