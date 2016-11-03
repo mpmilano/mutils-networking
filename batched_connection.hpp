@@ -152,6 +152,7 @@ namespace mutils {
 						   << id;
 						return ss.str(); }()};
 				action_t action;
+				std::mutex mut;
 				action_items() = default;
 				action_items(const id_type sid, const id_type id, new_connection_t& nc)
 					:socket_id(sid),id(id),action(nc(log_file)){}

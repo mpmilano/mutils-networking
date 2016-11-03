@@ -39,6 +39,7 @@ namespace mutils{
 			std::vector<std::unique_ptr<action_items> > receivers;
 			id_type socket_id{0};
 			s.receive(socket_id);
+			ctpl::thread_pool tp{1};
 			try { 
 				while (alive) {
 					//std::cout << "looping " << std::endl;
@@ -49,19 +50,28 @@ namespace mutils{
 					assert(size > 0);
 					if (receivers.size() <= id){
 						receivers.resize(id + 1);
+						tp.resize(id+1);
 					}
 					if (!receivers[id]) {
 						receivers[id].reset(new action_items(socket_id, id,new_connection));
 					}
 					//ready to receive
-					constexpr size_type max_size = 4096;
-					assert(size <= max_size);
-					std::array<char, max_size> recv_buf;
-					s.receive(size,recv_buf.data());
+					auto move_on_receive = [&](){
+						constexpr size_type max_size = 4096;
+						assert(size <= max_size);
+						std::array<char, max_size> recv_buf;
+						s.receive(size,recv_buf.data());
+						return recv_buf;
+					};
 					//std::cout << "message received" << std::endl;
 					auto &p = *receivers[id];
-					auto conn = connection{s,id};
-					(*p.action)(recv_buf.data(),conn);
+					tp.push(
+						[recv_buf = move_on_receive(),
+						 conn = connection{s,id},
+						 l = std::unique_lock<std::mutex>(p.mut),
+						 &p](int) mutable {
+							(*p.action)(recv_buf.data(),conn);
+						});
 					//std::cout << "action performed" << std::endl;
 				}
 			}
