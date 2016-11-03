@@ -1,7 +1,9 @@
 #pragma once
 #include "Socket.hpp"
 #include <mutex>
+#include <sstream>
 #include <atomic>
+#include <fstream>
 #include "ServerSocket.hpp"
 #include "buffer_generator.hpp"
 
@@ -28,7 +30,7 @@ namespace mutils {
 		 */
 		struct SocketBundle {
 			Socket sock;
-			const std::size_t socket_id = gensym();
+			const id_type socket_id = gensym();
 			std::atomic<id_type> unused_id{0};
 			std::vector<std::unique_ptr<incoming_message_queue> > incoming{connection_factor*2};
 			std::mutex socket_lock;
@@ -64,6 +66,13 @@ namespace mutils {
 			SocketBundle& sock;
 			
 			const id_type id;
+			std::ofstream log_file{[&](){
+					std::stringstream ss;
+					ss << "/tmp/event_log_client"
+					   << sock.socket_id
+					   << "-"
+					   << id;
+					return ss.str(); }()};
 			incoming_message_queue &my_queue;
 			connection(SocketBundle& s, id_type id);
 			operator bool() const {return valid();}
@@ -127,17 +136,26 @@ namespace mutils {
 			//function to call when new messages come in.
 			using action_t = std::unique_ptr<ReceiverFun>;
 
+			using new_connection_t = std::function<action_t (std::ofstream&) >;
+
 			//Represents  a logical connection; consider it an
 			//"instance" of the action that this receiver is set up to
 			//perform.  
 			struct action_items {
+				const id_type socket_id;
+				const id_type id;
+				std::ofstream log_file{[&](){
+						std::stringstream ss;
+						ss << "/tmp/event_log_server"
+						   << socket_id
+						   << "-"
+						   << id;
+						return ss.str(); }()};
 				action_t action;
 				action_items() = default;
-				action_items(action_t a)
-					:action(std::move(a)){}
+				action_items(const id_type sid, const id_type id, new_connection_t& nc)
+					:socket_id(sid),id(id),action(nc(log_file)){}
 			};
-
-			using new_connection_t = std::function<action_t (std::size_t sock_id, std::size_t conn_id) >;
 			
 			new_connection_t new_connection;
 
