@@ -37,6 +37,8 @@ namespace mutils{
 		void receiver::on_accept(bool& alive, Socket s){
 			//std::cout << "beginning accept loop" << std::endl;
 			std::vector<std::unique_ptr<action_items> > receivers;
+			std::size_t socket_id{0};
+			s.receive(socket_id);
 			try { 
 				while (alive) {
 					//std::cout << "looping " << std::endl;
@@ -49,7 +51,7 @@ namespace mutils{
 						receivers.resize(id + 1);
 					}
 					if (!receivers[id]) {
-						receivers[id].reset(new action_items(new_connection()));
+						receivers[id].reset(new action_items(new_connection(socket_id,id)));
 					}
 					//ready to receive
 					constexpr size_type max_size = 4096;

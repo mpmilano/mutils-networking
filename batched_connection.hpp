@@ -14,6 +14,9 @@ namespace mutils {
 		using BufGen = BufferGenerator<4096*8*8>;
 		using buf_ptr = BufGen::pointer;
 		static const constexpr std::size_t hdr_size = sizeof(id_type) + sizeof(size_type);
+
+		/** Number of logical connections per physical connection. */
+		static const constexpr unsigned short connection_factor = 8;
 		
 		struct incoming_message_queue{
 			std::list<buf_ptr> queue;
@@ -25,8 +28,9 @@ namespace mutils {
 		 */
 		struct SocketBundle {
 			Socket sock;
+			const std::size_t socket_id = gensym();
 			std::atomic<id_type> unused_id{0};
-			std::vector<std::unique_ptr<incoming_message_queue> > incoming;
+			std::vector<std::unique_ptr<incoming_message_queue> > incoming{connection_factor*2};
 			std::mutex socket_lock;
 
 			//represents a partial message whose
@@ -49,7 +53,9 @@ namespace mutils {
 			buf_ptr spare{BufGen::allocate()};
 			
 			SocketBundle(Socket sock)
-				:sock(sock){}
+				:sock(sock){
+				sock.send(socket_id);
+			}
 			SocketBundle(const SocketBundle&) = delete;
 			SocketBundle(SocketBundle&&) = delete;
 		};
@@ -83,9 +89,6 @@ namespace mutils {
 				return _this.send(std::forward<T>(t)...);
 			}
 		};
-
-		/** Number of logical connections per physical connection. */
-		static const constexpr unsigned short connection_factor = 8;
 		
 		/** Manages a set of logical TCP connections over a smaller set of physical TCP
 		 *  connections.
@@ -134,7 +137,7 @@ namespace mutils {
 					:action(std::move(a)){}
 			};
 
-			using new_connection_t = std::function<action_t () >;
+			using new_connection_t = std::function<action_t (std::size_t sock_id, std::size_t conn_id) >;
 			
 			new_connection_t new_connection;
 

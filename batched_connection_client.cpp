@@ -33,11 +33,14 @@ namespace mutils{
 
 		connection::connection(SocketBundle &s, id_type _id)
 			:sock(s),id(_id),my_queue(
-				[&](std::unique_lock<std::mutex>) -> incoming_message_queue& {
-					if (s.incoming.size() <= id) s.incoming.resize(id + 1);
+				[&]() -> incoming_message_queue& {
+					if (s.incoming.size() <= id){
+						assert(false && "we should hold a lock here, but it seems to result in deadlock");
+						s.incoming.resize(id + 1);
+					}
 					s.incoming[id].reset(new incoming_message_queue());
 					return *s.incoming[id];
-				}(std::unique_lock<std::mutex>{s.socket_lock})){}
+				}()){}
 
 		void connection::process_data (std::unique_lock<std::mutex> sock_lock, buf_ptr _payload, size_type payload_size)
 		{
