@@ -5,7 +5,7 @@
 
 using namespace mutils;
 using namespace std;
-namespace conn_space = mutils::simple_rpc;
+namespace conn_space = mutils::batched_connection;
 
 
 int main(int argc, char* argv[]){

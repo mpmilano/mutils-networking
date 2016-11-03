@@ -1,8 +1,7 @@
 #pragma once
 #include "Socket.hpp"
-#include "resource_pool.hpp"
-#include "better_cv.hpp"
-#include <shared_mutex>
+#include <mutex>
+#include <atomic>
 #include "ServerSocket.hpp"
 #include "buffer_generator.hpp"
 
@@ -10,9 +9,11 @@ namespace mutils {
 	namespace batched_connection {
 
 		struct batched_connections_impl;
+		using id_type = unsigned short;
+		using size_type = unsigned short;
 		using BufGen = BufferGenerator<4096*8*8>;
 		using buf_ptr = BufGen::pointer;
-		static const constexpr std::size_t hdr_size = 2*sizeof(std::size_t);
+		static const constexpr std::size_t hdr_size = sizeof(id_type) + sizeof(size_type);
 		
 		struct incoming_message_queue{
 			std::list<buf_ptr> queue;
@@ -24,18 +25,18 @@ namespace mutils {
 		 */
 		struct SocketBundle {
 			Socket sock;
-			std::atomic_int unused_id{0};
-			std::map<std::size_t,incoming_message_queue> incoming;
-			std::mutex socket_lock;;
+			std::atomic<id_type> unused_id{0};
+			std::vector<std::unique_ptr<incoming_message_queue> > incoming;
+			std::mutex socket_lock;
 
 			//represents a partial message whose
-			//destination is not currently known
+			//destination is not cubrrently known
 			//(we don't know if we've only gotten a prefix of the id)
 			struct orphan_t{
 				buf_ptr buf;
-				std::size_t size;
+				size_type size;
 				
-				orphan_t(buf_ptr b, std::size_t s)
+				orphan_t(buf_ptr b, size_type s)
 					:buf(std::move(b)),size(s){}
 			};
 
@@ -56,17 +57,17 @@ namespace mutils {
 		struct connection : public ::mutils::connection {
 			SocketBundle& sock;
 			
-			const std::size_t id;
+			const id_type id;
 			incoming_message_queue &my_queue;
-			connection(SocketBundle& s, std::size_t id);
+			connection(SocketBundle& s, id_type id);
 			operator bool() const {return valid();}
 			connection(const connection&) = delete;
 			connection(connection&&) = default;
 		private:
-			void process_data (std::unique_lock<std::mutex> sock_lock, buf_ptr _payload, std::size_t payload_size);
+			void process_data (std::unique_lock<std::mutex> sock_lock, buf_ptr _payload, size_type payload_size);
 			void from_network (std::unique_lock<std::mutex> l,
-							   std::size_t expected_size, buf_ptr from,
-							   std::size_t offset);
+							   size_type expected_size, buf_ptr from,
+							   size_type offset);
 		public:
 			std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
 			std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const);
@@ -84,14 +85,13 @@ namespace mutils {
 		};
 
 		/** Number of logical connections per physical connection. */
-		static const constexpr std::size_t connection_factor = 8;
+		static const constexpr unsigned short connection_factor = 8;
 		
 		/** Manages a set of logical TCP connections over a smaller set of physical TCP
 		 *  connections.
 		 */
 		struct connections {
 			struct Internals;
-			static_assert(sizeof(int)*2 <= sizeof(std::size_t),"Error: assumed two ints fit in size_t");
 			Internals *i;
 			
 			//connect to a server at address IP and port PORT, and open max_connections logical connections.
@@ -129,7 +129,6 @@ namespace mutils {
 			//perform.  
 			struct action_items {
 				action_t action;
-				std::mutex mut;
 				action_items() = default;
 				action_items(action_t a)
 					:action(std::move(a)){}

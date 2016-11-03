@@ -1,5 +1,4 @@
 #include "Socket.hpp"
-#include "resource_pool.hpp"
 #include "batched_connection.hpp"
 #include "batched_connection_common.hpp"
 #include <mutex>
@@ -13,11 +12,11 @@ namespace mutils{
 	struct batched_connections_impl {
 		const int ip;
 		const int port;
-		const std::size_t max_connections;
-		const std::size_t modulus = (max_connections > connection_factor ?
+		const unsigned short max_connections;
+		const unsigned short modulus = (max_connections > connection_factor ?
 									  max_connections / connection_factor :
 									  1);
-		std::atomic<std::size_t> current_connection_id{0};
+		std::atomic<id_type> current_connection_id{0};
 		std::vector<std::unique_ptr<SocketBundle> > bundles{modulus};
 
 		batched_connections_impl(const int ip, const int port, const int max_connections)
@@ -32,11 +31,15 @@ namespace mutils{
 	};
 
 
-		static_assert((std::size_t{2147483647} << sizeof(int)*8 ) >> sizeof(int)*8 == 2147483647, "Error; shifting logic wrong");
-		connection::connection(SocketBundle &s, std::size_t _id)
-			:sock(s),id(_id),my_queue(s.incoming[id]){}
+		connection::connection(SocketBundle &s, id_type _id)
+			:sock(s),id(_id),my_queue(
+				[&](std::unique_lock<std::mutex>) -> incoming_message_queue& {
+					if (s.incoming.size() <= id) s.incoming.resize(id + 1);
+					s.incoming[id].reset(new incoming_message_queue());
+					return *s.incoming[id];
+				}(std::unique_lock<std::mutex>{s.socket_lock})){}
 
-		void connection::process_data (std::unique_lock<std::mutex> sock_lock, buf_ptr _payload, std::size_t payload_size)
+		void connection::process_data (std::unique_lock<std::mutex> sock_lock, buf_ptr _payload, size_type payload_size)
 		{
 			static auto const max_vector_size =
 				std::numeric_limits<unsigned char>::max()
@@ -53,8 +56,8 @@ namespace mutils{
 					{new orphan_t(std::move(*payload),payload_size)};
 			}
 			else {
-				const std::size_t &id = ((std::size_t*)payload->payload)[0];
-				const std::size_t &size = ((std::size_t*)payload->payload)[1];
+				const id_type &id = ((id_type*)payload->payload)[0];
+				const size_type &size = ((size_type*)payload->payload)[1];
 				assert(size <= max_vector_size);
 				if (payload_size < size + hdr_size) {
 					assert(!sock.orphans);
@@ -65,7 +68,7 @@ namespace mutils{
 				}
 				else {
 					//payload is at least a full message; queue up that message and keep going.
-					auto &queue = sock.incoming.at(id);
+					auto &queue = *sock.incoming[id];
 					std::unique_lock<std::mutex> l{queue.queue_lock};
 					//this is the right client.  give it the part after the header.
 					queue.queue.emplace_back(payload->split(hdr_size));
@@ -91,13 +94,13 @@ namespace mutils{
 		}
 
 		void connection::from_network (std::unique_lock<std::mutex> l,
-									   std::size_t expected_size, buf_ptr from,
-									   std::size_t offset)
+									   size_type expected_size, buf_ptr from,
+									   size_type offset)
 		{
 			auto into = from.grow_to_fit(expected_size + offset);
 			auto into_size = into.size();
 			assert(into_size > offset);
-			std::size_t recv_size{0};
+			size_type recv_size{0};
 			try {
 				recv_size = sock.sock.drain(into.size() - offset,
 											into.payload + offset);
@@ -181,7 +184,7 @@ namespace mutils{
 			auto &_i = i->_this;
 			auto my_id = ++_i.current_connection_id;
 			auto &my_socket = _i.bundles.at(my_id% _i.modulus);
-			std::size_t conn_id = my_socket->unused_id;
+			id_type conn_id = my_socket->unused_id;
 			++my_socket->unused_id;
 			return connection{*my_socket,conn_id};
 		}

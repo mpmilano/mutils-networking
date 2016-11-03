@@ -2,15 +2,10 @@
 #include "batched_connection.hpp"
 
 namespace mutils{
+
+	namespace batched_connection {
 	
-	std::size_t send_with_id(::mutils::connection& sock, std::size_t id, std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs, std::size_t total_size);
+		std::size_t send_with_id(::mutils::connection& sock, id_type id, std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs, size_type total_size);
 
-	constexpr auto total_size(std::size_t how_many, std::size_t const * const sizes){
-		std::size_t accum{0};
-		for (unsigned int i = 0; i < how_many; ++i){
-			accum += sizes[i];
-		}
-		return accum;
 	}
-
 }

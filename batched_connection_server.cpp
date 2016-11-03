@@ -10,8 +10,8 @@ namespace mutils{
 		
 		struct receiver::connection: public ::mutils::connection {
 			Socket s;
-			const std::size_t id;
-			connection(Socket s, size_t id):s(s),id(id){}
+			const id_type id;
+			connection(Socket s, id_type id):s(s),id(id){}
 			connection(connection&& c):s(c.s),id(c.id){}
 			std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const buf){
 				return send_with_id(s,id,how_many,sizes,buf,total_size(how_many,sizes));
@@ -37,42 +37,29 @@ namespace mutils{
 		void receiver::on_accept(bool& alive, Socket s){
 			//std::cout << "beginning accept loop" << std::endl;
 			std::vector<std::unique_ptr<action_items> > receivers;
-			//std::map<std::size_t,  std::unique_ptr<action_items> > receivers;
-			//std::unique_ptr<ctpl::thread_pool> tp;
 			try { 
 				while (alive) {
 					//std::cout << "looping " << std::endl;
-					std::size_t id{0};
-					std::size_t size{0};
+					id_type id{0};
+					size_type size{0};
 					s.receive(id);
 					s.receive(size);
 					assert(size > 0);
 					if (receivers.size() <= id){
 						receivers.resize(id + 1);
-					}//*/
+					}
 					if (!receivers[id]) {
 						receivers[id].reset(new action_items(new_connection()));
-						//if (!tp) tp.reset(new ctpl::thread_pool{1});
-						//else tp->resize(receivers.size());
 					}
 					//ready to receive
-					constexpr std::size_t max_size = 4096;
+					constexpr size_type max_size = 4096;
 					assert(size <= max_size);
 					std::array<char, max_size> recv_buf;
 					s.receive(size,recv_buf.data());
 					//std::cout << "message received" << std::endl;
 					auto &p = *receivers[id];
 					auto conn = connection{s,id};
-					//auto l = std::unique_lock<std::mutex>{p.mut};
 					(*p.action)(recv_buf.data(),conn);
-					/*
-					tp->push(
-						[recv_buf, &p,
-						 conn = connection{s,id},
-						 l = std::unique_lock<std::mutex>{p.mut}
-							](int) mutable
-						{(*p.action)(recv_buf.data(),conn);}
-						);*/
 					//std::cout << "action performed" << std::endl;
 				}
 			}
