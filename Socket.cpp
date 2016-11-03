@@ -32,6 +32,10 @@ namespace mutils{
 		struct hostent *server;
 		
 		sockfd = socket(AF_INET, SOCK_STREAM, 0);
+		if (sockfd < 0){
+			std::cerr << ("ERROR opening socket: ") << std::strerror(errno) << std::endl; //*/
+			throw SocketException{};
+		}
 		{ int optval = 1;
 			setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&optval,sizeof(int));
 		}
@@ -39,7 +43,7 @@ namespace mutils{
 			setsockopt(sockfd,IPPROTO_TCP,TCP_NODELAY,&optval,sizeof(int));
 		}
 		if (sockfd < 0){
-			std::cerr << ("ERROR opening socket") << std::endl; //*/
+			std::cerr << ("ERROR opening socket: ") << std::strerror(errno) << std::endl; //*/
 			throw SocketException{};
 		}
 		bool complete = false;

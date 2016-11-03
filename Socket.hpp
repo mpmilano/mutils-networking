@@ -49,6 +49,7 @@ namespace mutils{
 		static Socket connect(int ip, int port);
 		
 		bool valid() const;
+		auto raw_fd() const { return i->sockID;}
 		
 		std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
 		template<typename duration>
