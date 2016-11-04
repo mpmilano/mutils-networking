@@ -28,7 +28,7 @@ namespace mutils{
 		}
 	};
 	
-	struct Socket : public connection{
+	struct Socket : public connection {
 	private:
 		struct Internals{
 			int sockID;
@@ -49,7 +49,7 @@ namespace mutils{
 		static Socket connect(int ip, int port);
 		
 		bool valid() const;
-		auto raw_fd() const { return i->sockID;}
+		auto underlying_fd() const { return i->sockID;}
 		
 		std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
 		template<typename duration>
@@ -57,9 +57,11 @@ namespace mutils{
 			using namespace std::chrono;
 			microseconds time = duration_cast<microseconds>(_time);
 			seconds _seconds = duration_cast<seconds>(time);
-			microseconds _microseconds = _seconds - time;
+			microseconds _microseconds = time - _seconds;
+			assert(_seconds + _microseconds == _time);
 			struct timeval tv{_seconds.count(),_microseconds.count()};
-			setsockopt(i->sockID, SOL_SOCKET,SO_RCVTIMEO, (char*) &tv, sizeof(tv));
+			auto success = setsockopt(i->sockID, SOL_SOCKET,SO_RCVTIMEO, (char*) &tv, sizeof(tv));
+			assert(success == 0);
 			return *this;
 		}
 		std::size_t drain(std::size_t buf_size, void* target);
