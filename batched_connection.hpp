@@ -2,6 +2,7 @@
 #include "Socket.hpp"
 #include <mutex>
 #include <sstream>
+#include "abortable_lock.hpp"
 #include <atomic>
 #include <fstream>
 #include "ServerSocket.hpp"
@@ -25,6 +26,8 @@ namespace mutils {
 			std::mutex queue_lock;
 		};
 
+		using locked_socket_t = std::unique_lock<typename abortable_locked_guardian::abortable_mutex>;
+
 		/** Maintains the message queues for all logical connections
 		 *  associated with a physical TCP socket
 		 */
@@ -33,8 +36,8 @@ namespace mutils {
 			const id_type socket_id = gensym();
 			std::atomic<id_type> unused_id{0};
 			std::vector<std::unique_ptr<incoming_message_queue> > incoming{connection_factor*2};
-			std::mutex socket_lock;
-
+			abortable_locked_guardian socket_lock;
+			
 			//represents a partial message whose
 			//destination is not cubrrently known
 			//(we don't know if we've only gotten a prefix of the id)
@@ -74,13 +77,14 @@ namespace mutils {
 					   << id;
 					return ss.str(); }()};
 			incoming_message_queue &my_queue;
+
 			connection(SocketBundle& s, id_type id);
 			operator bool() const {return valid();}
 			connection(const connection&) = delete;
 			connection(connection&&) = default;
 		private:
-			void process_data (std::unique_lock<std::mutex> sock_lock, buf_ptr _payload, size_type payload_size);
-			void from_network (std::unique_lock<std::mutex> l,
+			void process_data (locked_socket_t sock_lock, buf_ptr _payload, size_type payload_size);
+			void from_network (locked_socket_t l,
 							   size_type expected_size, buf_ptr from,
 							   size_type offset);
 		public:

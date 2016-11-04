@@ -25,7 +25,7 @@ namespace mutils{
 			 max_connections(max_connections)
 			{
 			for (auto &bundle : bundles){
-				bundle.reset(new SocketBundle{Socket::connect(ip,port).set_timeout(10s)});
+				bundle.reset(new SocketBundle{Socket::connect(ip,port).set_timeout(50ms)});
 			}
 		}
 	};
@@ -42,7 +42,7 @@ namespace mutils{
 					return *s.incoming[id];
 				}()){}
 
-		void connection::process_data (std::unique_lock<std::mutex> sock_lock, buf_ptr _payload, size_type payload_size)
+		void connection::process_data (locked_socket_t sock_lock, buf_ptr _payload, size_type payload_size)
 		{
 			static auto const max_vector_size =
 				std::numeric_limits<unsigned char>::max()
@@ -91,12 +91,12 @@ namespace mutils{
 
 		namespace {
 			struct ResourceReturn{
-				std::unique_lock<std::mutex> l;
+				locked_socket_t l;
 				buf_ptr from;
 			};
 		}
 
-		void connection::from_network (std::unique_lock<std::mutex> l,
+		void connection::from_network (locked_socket_t l,
 									   size_type expected_size, buf_ptr from,
 									   size_type offset)
 		{
@@ -104,26 +104,43 @@ namespace mutils{
 			auto into_size = into.size();
 			assert(into_size > offset);
 			size_type recv_size{0};
+			while (true){
 			try {
 				log_file << "waiting on network" << std::endl;
 				log_file.flush();
 				recv_size = sock.sock.drain(into.size() - offset,
 											into.payload + offset);
 				assert(into_size >= recv_size);
+				log_file << "network completed" << std::endl;
+				break;
 			}
 			catch (const Timeout&){
+				log_file << "status of queues: ";
+				for (std::size_t i = 0; i < sock.incoming.size(); ++i){
+					if (sock.incoming[i])
+						log_file << i << ":" << sock.incoming[i]->queue.size() << " ";
+				}
+				log_file << std::endl;
+				log_file.flush();
+				continue;
 				log_file << "network timeout; checking queue again" << std::endl;
 				log_file.flush();
 				throw ResourceReturn{std::move(l), std::move(into)};
+			}
+			break;
 			}
 			process_data(std::move(l),std::move(into),recv_size + offset);
 		};
 
 		std::size_t connection::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
+			using namespace std::chrono;
 			const auto expected_size = total_size(how_many, sizes);
+			log_file << "processing new receive" << std::endl;
 			while (true){
+				log_file << "iterating new receive" << std::endl;
 				if (my_queue.queue.size() > 0){
 					std::unique_lock<std::mutex> l{my_queue.queue_lock};
+					assert(my_queue.queue.size() > 0);
 					auto msg = std::move(my_queue.queue.front());
 					my_queue.queue.pop_front();
 					if (msg.size() != expected_size){
@@ -137,22 +154,21 @@ namespace mutils{
 					log_file.flush();
 					return expected_size;
 				}
-				else {
-					log_file << "waiting on lock" << std::endl;
+				else if (auto l = sock.socket_lock.lock_or_abort([&]{return (my_queue.queue.size() > 0);})) {
+					assert(l);
+					log_file << "lock acquired" << std::endl;
 					log_file.flush();
-					std::unique_lock<std::mutex> l{sock.socket_lock};
-					//retest condition - someone might have found us a message!
-					//this will implicitly drop the lock.
-					if (my_queue.queue.size() > 0) continue;
+					//it would be a bad bug if somehow we had a message ready
+					assert(my_queue.queue.size() == 0);
 					assert(sock.spare.payload || sock.orphans);
 					const auto real_expected = expected_size + hdr_size;
-					if (sock.orphans){
+					if (sock.orphans) {
 						auto orphan = std::move(sock.orphans); //nulls sock.orphans
 						const auto remaining_size = (orphan->size >= real_expected ?
 													 orphan->size :
 													 real_expected - orphan->size);
 						try {
-							from_network(std::move(l),
+							from_network(std::move(*l),
 										 remaining_size,
 										 std::move(orphan->buf),orphan->size);
 						}
@@ -165,7 +181,7 @@ namespace mutils{
 					else {
 						assert(sock.spare.payload);
 						try {
-							from_network(std::move(l),
+							from_network(std::move(*l),
 										 real_expected,
 										 std::move(sock.spare),0);
 						}
@@ -177,6 +193,7 @@ namespace mutils{
 				}
 			}
 		}
+
 		
 		std::size_t connection::raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs){
 			return send_with_id(log_file,sock.sock,id,how_many,sizes,bufs,total_size(how_many, sizes));
