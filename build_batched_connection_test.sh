@@ -10,7 +10,7 @@ $CC -I ../mutils-containers/ -I ../mutils-tasks/ -I ../mutils-serialization/ -I 
 wait
 killall bc_server
 killall bc_client
-./bc_server &
+./bc_client &
 ID=$!
-./bc_client
+./bc_server
 kill $ID
