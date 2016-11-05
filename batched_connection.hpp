@@ -75,10 +75,10 @@ namespace mutils {
 			connection(const connection&) = delete;
 			connection(connection&&) = default;
 		private:
-			void process_data (locked_socket_t sock_lock, buf_ptr _payload, size_type payload_size);
-			void from_network (locked_socket_t l,
-							   size_type expected_size, buf_ptr from,
-							   size_type offset);
+			locked_socket_t process_data (locked_socket_t sock_lock, buf_ptr _payload, size_type payload_size);
+			locked_socket_t from_network (locked_socket_t l,
+										  size_type expected_size, buf_ptr from,
+										  size_type offset);
 		public:
 			std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
 			std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const);

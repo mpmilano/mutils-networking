@@ -42,7 +42,7 @@ namespace mutils{
 					return *s.incoming[id];
 				}()){}
 
-		void connection::process_data (locked_socket_t sock_lock, buf_ptr _payload, size_type payload_size)
+		locked_socket_t connection::process_data (locked_socket_t sock_lock, buf_ptr _payload, size_type payload_size)
 		{
 			#ifndef NDEBUG
 			static auto const max_vector_size =
@@ -79,9 +79,10 @@ namespace mutils{
 					queue.queue.emplace_back(payload->split(hdr_size));
 					payload = &queue.queue.back();
 					auto leftover = payload->split(size);
+					assert(leftover.payload);
 					l.unlock();
 					if (payload_size > size + hdr_size){
-						process_data(std::move(sock_lock), std::move(leftover),
+						return process_data(std::move(sock_lock), std::move(leftover),
 									 payload_size - size - hdr_size);
 					}
 					else {
@@ -89,6 +90,7 @@ namespace mutils{
 					}
 				}
 			}
+			return sock_lock;
 		}
 
 		namespace {
@@ -98,7 +100,7 @@ namespace mutils{
 			};
 		}
 
-		void connection::from_network (locked_socket_t l,
+		locked_socket_t connection::from_network (locked_socket_t l,
 									   size_type expected_size, buf_ptr from,
 									   size_type offset)
 		{
@@ -116,7 +118,9 @@ namespace mutils{
 				throw ResourceReturn{std::move(l), std::move(into)};
 			}
 			assert(into_size >= recv_size);
-			process_data(std::move(l),std::move(into),recv_size + offset);
+			auto returned_l = process_data(std::move(l),std::move(into),recv_size + offset);
+			assert(sock.spare.payload || sock.orphans);
+			return returned_l;
 		};
 
 		std::size_t connection::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
@@ -150,7 +154,7 @@ namespace mutils{
 													 orphan->size :
 													 real_expected - orphan->size);
 						try {
-							from_network(std::move(*l),
+							*l = from_network(std::move(*l),
 										 remaining_size,
 										 std::move(orphan->buf),orphan->size);
 							assert(sock.spare.payload || sock.orphans);
@@ -165,7 +169,7 @@ namespace mutils{
 					else {
 						assert(sock.spare.payload);
 						try {
-							from_network(std::move(*l),
+							*l = from_network(std::move(*l),
 										 real_expected,
 										 std::move(sock.spare),0);
 							assert(sock.spare.payload || sock.orphans);
