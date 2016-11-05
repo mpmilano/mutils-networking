@@ -108,8 +108,13 @@ namespace mutils{
 #endif
 			assert(into_size > offset);
 			size_type recv_size{0};
-			recv_size = sock.sock.drain(into.size() - offset,
-										into.payload + offset);
+			try {
+				recv_size = sock.sock.drain(into.size() - offset,
+											into.payload + offset);
+			}
+			catch (const Timeout&){
+				throw ResourceReturn{std::move(l), std::move(into)};
+			}
 			assert(into_size >= recv_size);
 			process_data(std::move(l),std::move(into),recv_size + offset);
 		};
@@ -148,11 +153,13 @@ namespace mutils{
 							from_network(std::move(*l),
 										 remaining_size,
 										 std::move(orphan->buf),orphan->size);
+							assert(sock.spare.payload || sock.orphans);
 						}
 						catch(ResourceReturn &rr){
 							//we still have the lock; it's in rr
 							orphan->buf = std::move(rr.from);
 							sock.orphans = std::move(orphan);
+							assert(sock.spare.payload || sock.orphans);
 						}
 					}
 					else {
@@ -161,10 +168,12 @@ namespace mutils{
 							from_network(std::move(*l),
 										 real_expected,
 										 std::move(sock.spare),0);
+							assert(sock.spare.payload || sock.orphans);
 						}
 						catch(ResourceReturn &rr){
 							//we still have the lock; it's in rr
 							sock.spare = std::move(rr.from);
+							assert(sock.spare.payload || sock.orphans);
 						}
 					}
 				}
