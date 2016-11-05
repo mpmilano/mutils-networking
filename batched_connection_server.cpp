@@ -9,9 +9,9 @@ namespace mutils{
 	namespace batched_connection {
 		
 		struct receiver::connection: public ::mutils::connection {
-			Socket s;
+			Socket &s;
 			const id_type id;
-			connection(Socket s, id_type id):s(s),id(id){}
+			connection(Socket &s, id_type id):s(s),id(id){}
 			connection(connection&& c) = default;
 			std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const buf){
 				return send_with_id(s,id,how_many,sizes,buf,total_size(how_many,sizes));
@@ -27,7 +27,7 @@ namespace mutils{
 		receiver::receiver(int port, decltype(new_connection) new_connection)
 			:port(port),
 			 new_connection(new_connection),
-			 acl([this](auto &a, auto b){return this->on_accept(a,b);})
+			 acl([this](auto &a, auto b){return this->on_accept(a,std::move(b));})
 		{
 			//std::cout << "receiving on port: " << port << std::endl;
 		}

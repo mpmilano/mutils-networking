@@ -30,42 +30,31 @@ namespace mutils{
 	
 	struct Socket : public connection {
 	private:
-		struct Internals{
-			int sockID;
-			Internals(int);
-			virtual ~Internals();
-		};
-		
-		std::shared_ptr<Internals> i;
+		const int sockID{0};
+		bool is_valid{false};
 		
 	public:
 		
 		Socket(int sockID);
-		Socket();
-		Socket(const Socket&) = default;
-		Socket& operator=(const Socket&);
+		Socket() = default;
+		Socket(Socket&&);
+		Socket(const Socket&) = delete;
 
 		Socket(int ip, int port);
 		static Socket connect(int ip, int port);
 		
 		bool valid() const;
-		auto underlying_fd() const { return i->sockID;}
+		auto underlying_fd() const { return sockID;}
 		
 		std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
+
+		static Socket set_timeout(Socket s, std::chrono::microseconds time);
+		
 		template<typename duration>
-		Socket set_timeout(duration _time){
+		static Socket set_timeout(Socket s, duration _time){
 			using namespace std::chrono;
 			microseconds time = duration_cast<microseconds>(_time);
-			seconds _seconds = duration_cast<seconds>(time);
-			microseconds _microseconds = time - _seconds;
-			assert(_seconds + _microseconds == _time);
-			struct timeval tv{_seconds.count(),_microseconds.count()};
-#ifndef NDEBUG
-			auto success =
-#endif
-				setsockopt(i->sockID, SOL_SOCKET,SO_RCVTIMEO, (char*) &tv, sizeof(tv));
-			assert(success == 0);
-			return *this;
+			return set_timeout(std::move(s),time);
 		}
 		std::size_t drain(std::size_t buf_size, void* target);
 
@@ -84,7 +73,7 @@ namespace mutils{
 		
 		std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs);
 		std::size_t peek(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
-		virtual ~Socket(){}
+		virtual ~Socket();
 		
 	};
 }

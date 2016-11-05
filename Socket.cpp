@@ -10,59 +10,73 @@
 								
 namespace mutils{
 
-	Socket::Internals::Internals(int sid):sockID(sid){}
-	Socket::Internals::~Internals(){
-		if (sockID > 0) close(sockID);
+	Socket::~Socket(){
+		if (is_valid && sockID > 0) close(sockID);
 	}
 	
-	Socket::Socket(int sockID):i(new Internals{sockID}){}
-	Socket::Socket(){}
-	Socket& Socket::operator=(const Socket &s){
-		i = s.i;
-		return *this;
-	}
+	Socket::Socket(int sockID):
+		sockID(sockID),
+		is_valid(sockID > 0){}
 
 	bool Socket::valid() const {
-		return i && i->sockID > 0;
+		return is_valid && sockID > 0;
+	}
+
+	namespace {
+		int connect_socket(int ip, int portno){
+			int sockfd;
+			struct sockaddr_in serv_addr;
+			struct hostent *server;
+			
+			sockfd = socket(AF_INET, SOCK_STREAM, 0);
+			if (sockfd < 0){
+				std::cerr << ("ERROR opening socket: ") << std::strerror(errno) << std::endl; //*/
+				throw SocketException{};
+			}
+			{ int optval = 1;
+				setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&optval,sizeof(int));
+			}
+			{ int optval = 1;
+				setsockopt(sockfd,IPPROTO_TCP,TCP_NODELAY,&optval,sizeof(int));
+			}
+			if (sockfd < 0){
+				std::cerr << ("ERROR opening socket: ") << std::strerror(errno) << std::endl; //*/
+				throw SocketException{};
+			}
+			bool complete = false;
+			AtScopeEnd ase{[&](){
+					if (!complete){
+						close(sockfd);
+						sockfd = 0;
+					}
+				}};
+			server = gethostbyname(string_of_ip(ip).c_str());
+			assert(server);
+			bzero((char *) &serv_addr, sizeof(serv_addr));
+			serv_addr.sin_family = AF_INET;
+			bcopy((char *)server->h_addr,
+				  (char *)&serv_addr.sin_addr.s_addr,
+				  server->h_length);
+			serv_addr.sin_port = htons(portno);
+			if (::connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0){
+				std::cerr << ("ERROR connecting");
+				std::cerr << "tried to connect to host " << string_of_ip(ip) << " on port " << portno << std::strerror(errno) << std::endl; //*/
+				throw SocketException{};
+			}
+			complete = true;
+			return sockfd;
+		}
 	}
 	
-	Socket::Socket(int ip, int portno){
-		int sockfd;
-		struct sockaddr_in serv_addr;
-		struct hostent *server;
-		
-		sockfd = socket(AF_INET, SOCK_STREAM, 0);
-		if (sockfd < 0){
-			std::cerr << ("ERROR opening socket: ") << std::strerror(errno) << std::endl; //*/
-			throw SocketException{};
-		}
-		{ int optval = 1;
-			setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&optval,sizeof(int));
-		}
-		{ int optval = 1;
-			setsockopt(sockfd,IPPROTO_TCP,TCP_NODELAY,&optval,sizeof(int));
-		}
-		if (sockfd < 0){
-			std::cerr << ("ERROR opening socket: ") << std::strerror(errno) << std::endl; //*/
-			throw SocketException{};
-		}
-		bool complete = false;
-		AtScopeEnd ase{[&](){if (!complete) close(sockfd);}};
-		server = gethostbyname(string_of_ip(ip).c_str());
-		assert(server);
-		bzero((char *) &serv_addr, sizeof(serv_addr));
-		serv_addr.sin_family = AF_INET;
-		bcopy((char *)server->h_addr,
-			  (char *)&serv_addr.sin_addr.s_addr,
-			  server->h_length);
-		serv_addr.sin_port = htons(portno);
-		if (::connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0){
-			std::cerr << ("ERROR connecting");
-			std::cerr << "tried to connect to host " << string_of_ip(ip) << " on port " << portno << std::strerror(errno) << std::endl; //*/
-			throw SocketException{};
-		}
-		complete = true;
-		this->i.reset(new Internals(sockfd));
+	Socket::Socket(int ip, int portno)
+		:sockID(connect_socket(ip,portno)),
+		 is_valid(sockID > 0){}
+
+	Socket::Socket(Socket&& o)
+		:sockID(o.sockID),
+		 is_valid(o.is_valid)
+	{
+		o.is_valid = false;
 	}
 	
 	Socket Socket::connect(int ip, int portno){
@@ -70,7 +84,8 @@ namespace mutils{
 	}
 	
 	std::size_t Socket::drain(std::size_t size, void* target){
-		auto ret = recv(i->sockID, target,size,0);
+		assert(is_valid);
+		auto ret = recv(sockID, target,size,0);
 		if (ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)){
 			throw Timeout{};
 		}
@@ -78,7 +93,7 @@ namespace mutils{
 	}
 
 	namespace {
-	std::size_t receive_helper_socket_cpp(int& sockID, std::size_t how_many, std::size_t const * const sizes, void ** bufs, bool peek){
+		std::size_t receive_helper_socket_cpp(bool& is_valid, const int& sockID, std::size_t how_many, std::size_t const * const sizes, void ** bufs, bool peek){
 		/*std::cout << "receiving " << how_many << " payloads" << std::endl; //*/
 		iovec msgs[how_many];
 		std::size_t total_size = 0;
@@ -110,7 +125,7 @@ namespace mutils{
 		else if (n == 0){
 			std::stringstream err;
 			err << "connection broken";
-			sockID = -1;
+			is_valid = false;
 			throw ProtocolException(err.str());
 		}
 		else if (n < (int) total_size){
@@ -121,10 +136,12 @@ namespace mutils{
 	}
 
 	std::size_t Socket::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
-		return receive_helper_socket_cpp(i->sockID,how_many,sizes,bufs,false);
+		assert(is_valid);
+		return receive_helper_socket_cpp(is_valid,sockID,how_many,sizes,bufs,false);
 	}
 
 	std::size_t Socket::raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs){
+		assert(is_valid);
 		/*std::cout << "sending " << how_many << "payloads" << std::endl; //*/
 		iovec iovec_buf[how_many];
 		std::size_t total_size{0};
@@ -147,11 +164,11 @@ namespace mutils{
 				0,
 				0};
 		if (valid()){
-			auto sent = ::sendmsg(i->sockID,&payload,MSG_NOSIGNAL);
+			auto sent = ::sendmsg(sockID,&payload,MSG_NOSIGNAL);
 			/*std::cout << "sent " << sent << " bytes in total" << std::endl; //*/
 			bool complete = sent == (long) total_size;
 			if (!complete) {
-				if (sent == -1 && errno == EPIPE) i->sockID = -1;
+				if (sent == -1 && errno == EPIPE) is_valid = false;
 				else if (sent == -1){
 					std::stringstream err;
 					err << "tried sending " << total_size << " bytes, achieved " << sent << " accompanying error: " << std::strerror(errno);
@@ -164,6 +181,22 @@ namespace mutils{
 	}
 
 	std::size_t Socket::peek(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
-		return receive_helper_socket_cpp(i->sockID,how_many,sizes,bufs,true);
+		assert(is_valid);
+		return receive_helper_socket_cpp(is_valid,sockID,how_many,sizes,bufs,true);
+	}
+
+	Socket Socket::set_timeout(Socket s, std::chrono::microseconds time){
+		assert(s.is_valid);
+		using namespace std::chrono;
+		seconds _seconds = duration_cast<seconds>(time);
+		microseconds _microseconds = time - _seconds;
+		assert(_seconds + _microseconds == time);
+		struct timeval tv{_seconds.count(),_microseconds.count()};
+#ifndef NDEBUG
+		auto success =
+#endif
+			setsockopt(s.sockID, SOL_SOCKET,SO_RCVTIMEO, (char*) &tv, sizeof(tv));
+		assert(success == 0);
+		return s;
 	}
 }

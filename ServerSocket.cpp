@@ -89,8 +89,8 @@ namespace mutils{
 			if (async){
 				std::thread([alive = this->alive,
 							 onReceipt = this->onReceipt,
-							 sock = ss.receive()] () {
-								onReceipt(*alive,sock);
+							 sock = ss.receive()] () mutable {
+								onReceipt(*alive,std::move(sock));
 							}).detach();
 			}
 			else {

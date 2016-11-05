@@ -56,8 +56,8 @@ namespace mutils {
 			//invariant: not in use, of non-zero size.
 			buf_ptr spare{BufGen::allocate()};
 			
-			SocketBundle(Socket sock)
-				:sock(sock){
+			SocketBundle(Socket _sock)
+				:sock(std::move(_sock)){
 				sock.send(socket_id);
 			}
 			SocketBundle(const SocketBundle&) = delete;
