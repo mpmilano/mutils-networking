@@ -11,14 +11,16 @@ namespace mutils{
 		struct receiver::connection: public ::mutils::connection {
 			Socket s;
 			const id_type id;
-			std::ofstream &log_file;
-			connection(Socket s, id_type id, std::ofstream& log_file):s(s),id(id),log_file(log_file){}
+			connection(Socket s, id_type id):s(s),id(id){}
 			connection(connection&& c) = default;
 			std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const buf){
-				return send_with_id(log_file,s,id,how_many,sizes,buf,total_size(how_many,sizes));
+				return send_with_id(s,id,how_many,sizes,buf,total_size(how_many,sizes));
 			}
 			bool valid() const {return true;}
-			std::size_t raw_receive(std::size_t, std::size_t const * const, void **) {assert(false);}
+			std::size_t raw_receive(std::size_t, std::size_t const * const, void **) {
+				assert(false);
+				throw ProtocolException{"Cannot receive on this socket"};
+			}
 			connection(const connection&) = delete;
 		};
 
@@ -57,22 +59,19 @@ namespace mutils{
 						receivers[id].reset(new action_items(socket_id, id,new_connection));
 					}
 					auto &p = *receivers[id];
-					auto &log_file = p.log_file;
 					//ready to receive
 					auto move_on_receive = [&](){
 						constexpr size_type max_size = 4096;
 						assert(size <= max_size);
 						std::array<char, max_size> recv_buf;
-						auto size_rcvd = s.receive(size,recv_buf.data());
-						log_file << "received " << size_rcvd << "bytes" << std::endl;
-						log_file.flush();
+						s.receive(size,recv_buf.data());
 						return recv_buf;
 					};
 					//std::cout << "message received" << std::endl;
 
 					tp.push(
 						[recv_buf = move_on_receive(),
-						 conn = connection{s,id,log_file},
+						 conn = connection{s,id},
 						 l = std::unique_lock<std::mutex>(p.mut),
 						 &p](int) mutable {
 							(*p.action)(recv_buf.data(),conn);

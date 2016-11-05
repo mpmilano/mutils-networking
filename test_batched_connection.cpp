@@ -22,7 +22,10 @@ int main(int argc, char* argv[]){
 				s.receive(recv);
 				assert(recv == recv_port);
 				recv = 0;
-				auto amount = s.drain(1000,&recv);
+#ifndef NDEBUG
+				auto amount =
+#endif
+					s.drain(1000,&recv);
 				assert(amount == sizeof(recv));
 				assert(recv == recv_port);
 			}};
@@ -36,15 +39,19 @@ int main(int argc, char* argv[]){
 	std::cout << "portno is: " << portno << std::endl;
 	using action_t = typename conn_space::receiver::action_t;
 	std::thread receiver{[&]{
-			conn_space::receiver{portno,[](const auto& ... ){
+			conn_space::receiver{portno,[](){
 					//std::cout << "receiver triggered" << std::endl;
 					struct ReceiverFun : public conn_space::ReceiverFun {
 						bool on_first_message{true};
+						#ifndef NDEBUG
 						std::mutex assert_single_threaded;
+						#endif
 						void operator()(const void* inbnd, connection& c) {
+							#ifndef NDEBUG
 							bool success = assert_single_threaded.try_lock();
 							assert(success);
 							AtScopeEnd ase{[&]{assert_single_threaded.unlock();}};
+							#endif
 							//std::cout << "received message" << std::endl;
 							if (on_first_message){
 								//std::cout << "expected this message is size_t" << std::endl;
@@ -114,7 +121,7 @@ int main(int argc, char* argv[]){
 								   &outlier100_count,
 								   my_msg](int) mutable
 								  {
-					for(unsigned int i = 0; true; ++i){
+					for(unsigned int i = 0; i < 100000; ++i){
 						/*time_t old_time = event_counts.at(my_msg);
 						auto now = high_resolution_clock::now();
 						assert(now - old_time < 30s);

@@ -53,7 +53,10 @@ struct EPoll{
 		auto infd = new_fd.underlying_fd();
 		event.data.fd = infd;
 		event.events = EPOLLIN;
-		auto retcode = epoll_ctl (epoll_fd, EPOLL_CTL_ADD, infd, &event);
+		#ifndef NDEBUG
+		auto retcode = 
+		#endif
+			epoll_ctl (epoll_fd, EPOLL_CTL_ADD, infd, &event);
 		assert(retcode == 0);
 		++max_events;
 		returned_events.emplace_back();

@@ -42,7 +42,10 @@ namespace mutils{
 			}
 		};
 		{
-			bool success = listen(sockfd,50) == 0;
+			#ifndef NDEBUG
+			bool success = 0 ==
+#endif
+				listen(sockfd,50);
 			assert(success);
 		}
 		

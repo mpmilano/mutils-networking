@@ -60,7 +60,10 @@ namespace mutils{
 			microseconds _microseconds = time - _seconds;
 			assert(_seconds + _microseconds == _time);
 			struct timeval tv{_seconds.count(),_microseconds.count()};
-			auto success = setsockopt(i->sockID, SOL_SOCKET,SO_RCVTIMEO, (char*) &tv, sizeof(tv));
+#ifndef NDEBUG
+			auto success =
+#endif
+				setsockopt(i->sockID, SOL_SOCKET,SO_RCVTIMEO, (char*) &tv, sizeof(tv));
 			assert(success == 0);
 			return *this;
 		}

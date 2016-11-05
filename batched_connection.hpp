@@ -4,7 +4,6 @@
 #include <sstream>
 #include "abortable_lock.hpp"
 #include <atomic>
-#include <fstream>
 #include "ServerSocket.hpp"
 #include "buffer_generator.hpp"
 
@@ -69,13 +68,6 @@ namespace mutils {
 			SocketBundle& sock;
 			
 			const id_type id;
-			std::ofstream log_file{[&](){
-					std::stringstream ss;
-					ss << "/tmp/event_log_client"
-					   << sock.socket_id
-					   << "-"
-					   << id;
-					return ss.str(); }()};
 			incoming_message_queue &my_queue;
 
 			connection(SocketBundle& s, id_type id);
@@ -140,7 +132,7 @@ namespace mutils {
 			//function to call when new messages come in.
 			using action_t = std::unique_ptr<ReceiverFun>;
 
-			using new_connection_t = std::function<action_t (std::ofstream&) >;
+			using new_connection_t = std::function<action_t () >;
 
 			//Represents  a logical connection; consider it an
 			//"instance" of the action that this receiver is set up to
@@ -148,18 +140,11 @@ namespace mutils {
 			struct action_items {
 				const id_type socket_id;
 				const id_type id;
-				std::ofstream log_file{[&](){
-						std::stringstream ss;
-						ss << "/tmp/event_log_server"
-						   << socket_id
-						   << "-"
-						   << id;
-						return ss.str(); }()};
 				action_t action;
 				std::mutex mut;
 				action_items() = default;
 				action_items(const id_type sid, const id_type id, new_connection_t& nc)
-					:socket_id(sid),id(id),action(nc(log_file)){}
+					:socket_id(sid),id(id),action(nc()){}
 			};
 			
 			new_connection_t new_connection;
