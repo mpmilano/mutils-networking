@@ -25,7 +25,15 @@ namespace mutils{
 			 max_connections(max_connections)
 			{
 			for (auto &bundle : bundles){
-				bundle.reset(new SocketBundle{Socket::set_timeout(Socket::connect(ip,port),500ms)});
+				bundle.reset(new SocketBundle{
+#ifndef NDEBUG
+						Socket::set_timeout(
+#endif
+							Socket::connect(ip,port)
+#ifndef NDEBUG
+							,500ms)
+#endif
+							});
 			}
 		}
 	};
