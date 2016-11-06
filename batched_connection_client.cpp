@@ -119,10 +119,22 @@ namespace mutils{
 			assert(into_size > offset);
 			size_type recv_size{0};
 			try {
+#ifndef NDEBUG
+				log_file << "waiting on network" << std::endl;
+				log_file.flush();
+#endif
 				recv_size = sock.sock.drain(into.size() - offset,
 											into.payload + offset);
+#ifndef NDEBUG
+				log_file << "network completed" << std::endl;
+				log_file.flush();
+#endif			
 			}
 			catch (const Timeout&){
+#ifndef NDEBUG
+				log_file << "network timeout; checking queue again" << std::endl;
+				log_file.flush();
+#endif
 				throw ResourceReturn{std::move(l), std::move(into)};
 			}
 			assert(into_size >= recv_size);
@@ -134,25 +146,41 @@ namespace mutils{
 		std::size_t connection::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
 			using namespace std::chrono;
 			const auto expected_size = total_size(how_many, sizes);
+#ifndef NDEBUG
+			log_file << "processing new receive" << std::endl;
+			log_file.flush();
+#endif
 			while (true){
+#ifndef NDEBUG
+				log_file << "iterating new receive" << std::endl;
+#endif
 				if (my_queue.queue.size() > 0){
 					std::unique_lock<std::mutex> l{my_queue.queue_lock};
 					assert(my_queue.queue.size() > 0);
 					auto msg = std::move(my_queue.queue.front());
 					my_queue.queue.pop_front();
-					#ifndef NDEBUG
+#ifndef NDEBUG
 					if (msg.size() != expected_size){
 						std::cerr << msg.size() << std::endl;
 						std::cerr << expected_size << std::endl;
 					}
 					assert(msg.size() == expected_size);
-					#endif
+#endif
 					copy_into(how_many,sizes,bufs,(char*)msg.payload);
+#ifndef NDEBUG
+					log_file << "found message of size " << msg.size() << " (expected " << expected_size << ") "
+							 << "waiting in incoming queue" << std::endl;
+					log_file.flush();
+#endif
 					return expected_size;
 				}
 				else if (auto l = sock.socket_lock.lock_or_abort([&]{return (my_queue.queue.size() > 0);})) {
 					assert(l);
 					//it would be a bad bug if somehow we had a message ready
+#ifndef NDEBUG
+					log_file << "lock acquired" << std::endl;
+					log_file.flush();
+#endif
 					assert(my_queue.queue.size() == 0);
 					assert(sock.spare.payload || sock.orphans);
 					const auto real_expected = expected_size + hdr_size;
@@ -194,7 +222,7 @@ namespace mutils{
 
 		
 		std::size_t connection::raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs){
-			return send_with_id(sock.sock,id,how_many,sizes,bufs,total_size(how_many, sizes));
+			return send_with_id(whendebug(log_file,) sock.sock,id,how_many,sizes,bufs,total_size(how_many, sizes));
 		}
 
 		struct connections::Internals{

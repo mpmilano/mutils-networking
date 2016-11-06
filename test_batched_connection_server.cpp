@@ -11,7 +11,7 @@ int main(int argc, char* argv[]){
 	const auto portno = (argc > 1 ? std::atoi(argv[1]) : 9876);
 	std::cout << "portno is: " << portno << std::endl;
 	using action_t = typename conn_space::receiver::action_t;
-	conn_space::receiver{portno,[](){
+	conn_space::receiver{portno,[](whendebug(std::ofstream&)){
 				//std::cout << "receiver triggered" << std::endl;
 				struct ReceiverFun : public conn_space::ReceiverFun {
 					bool on_first_message{true};
