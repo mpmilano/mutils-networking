@@ -129,14 +129,31 @@ namespace mutils {
 		//(produced by a separate call to new_connection) per logical connection.
 
 		struct ReceiverFun {
-			virtual void operator()(const void*, ::mutils::connection&) = 0;
+			//this *must* be wait-free.  We're calling it in the receive thread!
+			virtual void deliver_new_event(const void*, ::mutils::connection&) = 0;
+			//this *must* be wait-free.  We're calling it in the receive thread!
+			virtual void async_tick(::mutils::connection&) = 0;
+			//must be able to select() on this int as an FD
+			//where a "read" ready indicates it's time to
+			//call async_tick
+			virtual int underlying_fd() = 0;
 			virtual ~ReceiverFun(){}
 		};
 		
 		struct receiver {
 			
 			//returns expected next message size
-			struct connection;
+			struct connection : public ::mutils::connection {
+				Socket &s;
+				const id_type id;
+				whendebug(std::ofstream &log_file;)
+				connection(Socket &s, id_type id whendebug(, std::ofstream& log_file));
+				connection(connection&& c) = default;
+				std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const buf);
+				bool valid() const;
+				std::size_t raw_receive(std::size_t, std::size_t const * const, void **);
+				connection(const connection&) = delete;
+			};
 			// physical TCP port
 			const int port;
 			//function to call when new messages come in.
@@ -159,11 +176,13 @@ namespace mutils {
 						   << id;
 						return ss.str(); }()};
 #endif
+				connection conn;
 				action_t action;
+				auto underlying_fd() const {return action->underlying_fd();}
 				std::mutex mut;
 				action_items() = default;
-				action_items(const id_type sid, const id_type id, new_connection_t& nc)
-					:socket_id(sid),id(id),action(nc(whendebug(log_file))){}
+				action_items(Socket &s, const id_type sid, const id_type id, new_connection_t& nc)
+					:socket_id(sid),id(id),conn(s, id whendebug(, log_file)),action(nc(whendebug(log_file))){}
 			};
 			
 			new_connection_t new_connection;

@@ -32,6 +32,7 @@ namespace mutils{
 	private:
 		const int sockID{0};
 		bool is_valid{false};
+		whendebug(std::string why_not_valid);
 		
 	public:
 		

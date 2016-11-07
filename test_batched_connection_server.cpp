@@ -1,7 +1,9 @@
 #include "batched_connection.hpp"
 #include "simple_rpc.hpp"
 #include "GlobalPool.hpp"
+#include "eventfd.hpp"
 #include <unistd.h>
+#include <set>
 
 using namespace mutils;
 using namespace std;
@@ -11,14 +13,36 @@ int main(int argc, char* argv[]){
 	const auto portno = (argc > 1 ? std::atoi(argv[1]) : 9876);
 	std::cout << "portno is: " << portno << std::endl;
 	using action_t = typename conn_space::receiver::action_t;
-	conn_space::receiver{portno,[](whendebug(std::ofstream&)){
+#ifndef NDEBUG
+	std::set<connection*> used_connections;
+#endif
+	conn_space::receiver{portno,[&](whendebug(std::ofstream&)){
 				//std::cout << "receiver triggered" << std::endl;
 				struct ReceiverFun : public conn_space::ReceiverFun {
 					bool on_first_message{true};
+					eventfd event_fd;
+					connection* _c{nullptr};
+
+
+					using second_t = std::unique_ptr<std::vector<unsigned char> >;
+					using pair_t = std::pair<int, second_t>;
+					
+					pair_t recv{-1,second_t{nullptr}};
 #ifndef NDEBUG
+					std::set<connection*> &used_connections;
 					std::mutex assert_single_threaded;
+					ReceiverFun(std::set<connection*> &used_connections)
+						:used_connections(used_connections){}
 #endif
-					void operator()(const void* inbnd, connection& c) {
+					void deliver_new_event(const void* inbnd, connection&c) {
+						if (_c) assert(_c == &c);
+						else {
+							_c = &c;
+#ifndef NDEBUG
+							assert(used_connections.count(_c) == 0);
+							used_connections.insert(_c);
+#endif
+						}
 #ifndef NDEBUG
 						bool success = assert_single_threaded.try_lock();
 						assert(success);
@@ -27,35 +51,53 @@ int main(int argc, char* argv[]){
 						//std::cout << "received message" << std::endl;
 						if (on_first_message){
 							//std::cout << "expected this message is size_t" << std::endl;
-							int rcv = *((int*)(inbnd));
-							c.send(rcv);
+							recv.first = *((int*)(inbnd));
 							on_first_message = false;
+							event_fd.notify();
+							//async_tick(c);
 						}
 						else{
 							//std::cout << "expected this message is vector" << std::endl;
-							auto received = from_bytes<std::vector<unsigned char> >(nullptr,((char*) inbnd));
+							recv.second = from_bytes<std::vector<unsigned char> >(nullptr,((char*) inbnd));
 							{
 								stringstream ss;
-								ss << "received " << received->size() << " element vector" << std::endl;
-								//std::cout << ss.str();
-							}
-							auto random = better_rand();
-							assert(random >= 0 && random <= 1);
-							uint index = random * received->size();
-							if (index == received->size()) index = 0;
-							if (received->size() != 0){
-								assert(index < received->size());
-								(*received)[index]++;
-							}
-							{
-								stringstream ss;
-								ss << "sending " << c.send(*received) << " bytes of vector back" << std::endl;
+								ss << "received " << recv.second->size() << " element vector" << std::endl;
 								//std::cout << ss.str();
 							}
 							on_first_message = true;
+							event_fd.notify();
+							//async_tick(c);
 						}
 					}
+
+					void async_tick(::mutils::connection& c){
+						event_fd.wait();
+						assert(_c);
+						assert(_c == &c);
+						if (recv.first == -1 && recv.second){
+							auto &sm_recv = recv.second;
+							assert(sm_recv);
+							auto random = better_rand();
+							assert(random >= 0 && random <= 1);
+							uint index = random * sm_recv->size();
+							if (index == sm_recv->size()) index = 0;
+							if (sm_recv->size() != 0){
+								assert(index < sm_recv->size());
+								(*sm_recv)[index]++;
+							}
+							{
+								stringstream ss;
+								ss << "sending " << c.send(*sm_recv) << " bytes of vector back" << std::endl;
+								//std::cout << ss.str();
+							}
+						}
+						else {
+							c.send(recv.first);
+							recv.first = -1;
+						}
+					}
+					int underlying_fd(){ return event_fd.underlying_fd();}
 				};
-				return action_t{new ReceiverFun{}};
+				return action_t{new ReceiverFun{whendebug(used_connections)}};
 			}}.loop_until_false_set();
 }

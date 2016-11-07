@@ -11,7 +11,17 @@
 namespace mutils{
 
 	Socket::~Socket(){
-		if (is_valid && sockID > 0) close(sockID);
+		if (is_valid && sockID > 0) {
+#ifndef NDEBUG
+			std::cerr << "closing socket" << std::endl;
+#endif
+			close(sockID);
+		}
+#ifndef NDEBUG
+		else {
+			std::cerr << "socket moved" << std::endl;
+		}
+#endif
 	}
 	
 	Socket::Socket(int sockID):
@@ -77,6 +87,7 @@ namespace mutils{
 		 is_valid(o.is_valid)
 	{
 		o.is_valid = false;
+		whendebug(o.why_not_valid = "Socket moved away");
 	}
 	
 	Socket Socket::connect(int ip, int portno){
@@ -84,7 +95,7 @@ namespace mutils{
 	}
 	
 	std::size_t Socket::drain(std::size_t size, void* target){
-		assert(is_valid);
+		assert(is_valid ? true : [&]{std::cerr << why_not_valid << std::endl; return false;}());
 		auto ret = recv(sockID, target,size,0);
 		if (ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)){
 			throw Timeout{};
@@ -93,7 +104,7 @@ namespace mutils{
 	}
 
 	namespace {
-		std::size_t receive_helper_socket_cpp(bool& is_valid, const int& sockID, std::size_t how_many, std::size_t const * const sizes, void ** bufs, bool peek){
+		std::size_t receive_helper_socket_cpp(whendebug(std::string& why_not_valid,) bool& is_valid, const int& sockID, std::size_t how_many, std::size_t const * const sizes, void ** bufs, bool peek){
 		/*std::cout << "receiving " << how_many << " payloads" << std::endl; //*/
 		iovec msgs[how_many];
 		std::size_t total_size = 0;
@@ -126,6 +137,7 @@ namespace mutils{
 			std::stringstream err;
 			err << "connection broken";
 			is_valid = false;
+			whendebug(why_not_valid = "connection broken");
 			throw ProtocolException(err.str());
 		}
 		else if (n < (int) total_size){
@@ -136,12 +148,12 @@ namespace mutils{
 	}
 
 	std::size_t Socket::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
-		assert(is_valid);
-		return receive_helper_socket_cpp(is_valid,sockID,how_many,sizes,bufs,false);
+		assert(is_valid ? true : [&]{std::cerr << why_not_valid << std::endl; return false;}());
+		return receive_helper_socket_cpp(whendebug(why_not_valid,) is_valid,sockID,how_many,sizes,bufs,false);
 	}
 
 	std::size_t Socket::raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs){
-		assert(is_valid);
+		assert(is_valid ? true : [&]{std::cerr << why_not_valid << std::endl; return false;}());
 		/*std::cout << "sending " << how_many << "payloads" << std::endl; //*/
 		iovec iovec_buf[how_many];
 		std::size_t total_size{0};
@@ -168,7 +180,10 @@ namespace mutils{
 			/*std::cout << "sent " << sent << " bytes in total" << std::endl; //*/
 			bool complete = sent == (long) total_size;
 			if (!complete) {
-				if (sent == -1 && errno == EPIPE) is_valid = false;
+				if (sent == -1 && errno == EPIPE) {
+					is_valid = false;
+					whendebug(why_not_valid = "received epipe");
+				}
 				else if (sent == -1){
 					std::stringstream err;
 					err << "tried sending " << total_size << " bytes, achieved " << sent << " accompanying error: " << std::strerror(errno);
@@ -181,8 +196,8 @@ namespace mutils{
 	}
 
 	std::size_t Socket::peek(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
-		assert(is_valid);
-		return receive_helper_socket_cpp(is_valid,sockID,how_many,sizes,bufs,true);
+		assert(is_valid ? true : [&]{std::cerr << why_not_valid << std::endl; return false;}());
+		return receive_helper_socket_cpp(whendebug(why_not_valid,) is_valid,sockID,how_many,sizes,bufs,true);
 	}
 
 	Socket Socket::set_timeout(Socket s, std::chrono::microseconds time){

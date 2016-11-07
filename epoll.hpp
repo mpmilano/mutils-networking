@@ -2,79 +2,93 @@
 #include <sys/epoll.h>
 #include <vector>
 #include <unordered_map>
+#include <iostream>
 
 //purpose: wrap epoll logic in a class for easier use.
 //the epoll logic contained herein is from https://banu.com/blog/2/how-to-use-epoll-a-complete-example-in-c/
 
-template<typename FDType>
+namespace mutils{
+
 struct EPoll{
-	struct epoll_event event;
+	struct epoll_event event{0,epoll_data_t{.u64 = 0}};
 	int max_events{0};
 	std::vector<struct epoll_event> returned_events;
 	int epoll_fd{epoll_create1(0)};
-	std::unordered_map<int, FDType> fd_lookup;
 
-	EPoll(){
-		assert(epoll_fd > 0);
-	}
-
-	//wait() will give you ownership over the file
-	//descriptors that EPoll covers.
-	//YOU MUST EITHER CLOSE OR RETURN THESE.
-	auto wait(){
-		using namespace std;
-		std::list<FDType> ret;
-		auto n = epoll_wait(epoll_fd, returned_events.data(),max_events,-1);
-		for (int i = 0; i < n; ++i){
-			if ((returned_events.at(i).events & EPOLLERR) ||
-				(returned_events.at(i).events & EPOLLHUP) ||
-				(!(returned_events.at(i).events & EPOLLIN)))
-			{
-				/* An error has occured on this fd, or the socket is not
-				   ready for reading (why were we notified then?) */
-				std::cerr <<  "epoll error\n" << std::endl;
-				//this should have the side effect of closing this resource
-				fd_lookup.erase(returned_events.at(i).data.fd);
-				continue;
-			}
-			else {
-				ret.emplace_back(
-					std::move(
-						fd_lookup.at(returned_events.at(i).data.fd)
-						)
-					);
-			}
+	struct epoll_action{
+		template<typename FDType>
+		static void delete_epoll_obj_specific(void *v){
+			delete ((FDType*) v);
 		}
-		return ret;
-	}
+		using delete_fp_t = void (*) (void*);
+		
+		void * epoll_obj;
+		const delete_fp_t delete_epoll_obj;
+		const std::function<void (void*)> _action;
+		void action();
 
-	FDType& add(FDType new_fd){
+		template<typename FDType>
+		epoll_action(std::unique_ptr<FDType> resource, std::function<void (FDType&)> action)
+			:epoll_obj(resource.release()),
+			 delete_epoll_obj(delete_epoll_obj_specific<FDType>),
+			 _action([action](void* epoll_obj) {if (epoll_obj) return action(*((FDType*) epoll_obj));}) {}
+
+		epoll_action(const epoll_action&) = delete;
+		epoll_action(epoll_action&& o);
+		
+		~epoll_action();
+
+		template<typename FDType>
+		std::unique_ptr<FDType> release(){
+			std::unique_ptr<FDType> ret{(FDType*)epoll_obj};
+			epoll_obj = 0;
+			return ret;
+		}
+	};
+	
+	std::unordered_map<int, epoll_action> fd_lookup;
+
+	EPoll();
+
+	void wait();
+
+	template<typename FDType>
+	FDType& add(std::unique_ptr<FDType> new_fd, std::function<void (FDType&)> action){
 		using namespace std;
-		auto infd = new_fd.underlying_fd();
+		auto infd = new_fd->underlying_fd();
 		event.data.fd = infd;
 		event.events = EPOLLIN;
 		#ifndef NDEBUG
 		auto retcode = 
 		#endif
 			epoll_ctl (epoll_fd, EPOLL_CTL_ADD, infd, &event);
+		#ifndef NDEBUG
+		if (retcode == -1){
+			std::cerr << std::strerror(errno) << std::endl;
+			std::cerr << infd << std::endl;
+			std::cerr << typeid(*new_fd).name() << std::endl;
+		}
 		assert(retcode == 0);
+		#endif
 		++max_events;
 		returned_events.emplace_back();
-		return fd_lookup.emplace(infd,std::move(new_fd)).first->second;
+		return *( (FDType*) fd_lookup.emplace(infd,epoll_action{std::move(new_fd),action}).first->second.epoll_obj);
 	}
 
-	/*
-	  if you got an FDType from me, please return it here.
-	 */
-	FDType& return_ownership(FDType returned_fd){
-		return fd_lookup.insert_or_assign(returned_fd.underlying_fd(),
-								 std::move(returned_fd)).first->second;
+	template<typename FDType>
+	std::unique_ptr<FDType> remove(const FDType& fd){
+		int raw_fd = fd.underlying_fd();
+		event.data.fd = raw_fd;
+		event.events = EPOLLIN;
+		auto ret = std::move(fd_lookup.at(raw_fd));
+		epoll_ctl (epoll_fd, EPOLL_CTL_DEL, raw_fd, &event);
+		fd_lookup.erase(raw_fd);
+		return std::unique_ptr<FDType>{ret.template release<FDType>()};
 	}
 
 	EPoll(const EPoll&) = delete;
 
-	~EPoll(){
-		close(epoll_fd);
-	}
+	~EPoll();
 	
 };
+}
