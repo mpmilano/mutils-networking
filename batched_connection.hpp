@@ -202,7 +202,7 @@ namespace mutils {
 					:super(super){
 					s.receive(socket_id);
 					epoll-> template add<Socket>(
-						std::make_unique<Socket>(std::move(s)),
+						std::make_unique<Socket>(Socket::set_timeout(std::move(s),std::chrono::milliseconds(5))),
 						[&](Socket &s){return receive_action(s);});
 				}
 				
@@ -256,8 +256,7 @@ namespace mutils {
 					auto next = (last_used_list + 1)%thread_count;
 					
 					active_sockets[next].active_sockets.enqueue(
-						std::make_unique<receiver_state>(
-							Socket::set_timeout(ss.receive(),(5ms)),*this));
+						std::make_unique<receiver_state>(ss.receive(),*this));
 					active_sockets[next].active_sockets_notify.notify();
 					last_used_list = next;
 				}
