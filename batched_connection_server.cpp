@@ -21,86 +21,103 @@ namespace mutils{
 		}
 
 		receiver::receiver(int port, decltype(new_connection) new_connection)
+			:receiver((std::make_index_sequence<thread_count>*) nullptr,
+					  port, new_connection){}
+
+		template<std::size_t... indices>
+		receiver::receiver(std::index_sequence<indices...> const * const,
+						   int port, decltype(new_connection) new_connection)
 			:port(port),
 			 new_connection(new_connection),
-			 acl([this](auto &a, auto b){return this->on_accept(a,std::move(b));})
-		{
-			//std::cout << "receiving on port: " << port << std::endl;
-		}
+			 active_sockets{(indices ? *this : *this)...}
+			 {
+				 //std::cout << "receiving on port: " << port << std::endl;
+			 }
 
-		void receiver::loop_until_false_set(){
-			//std::cout << "receiver thread up " << std::endl;
-			acl.loop_until_dead(port,true);
-		}
-
-		void receiver::on_accept(bool& server_alive, Socket s){
-			//std::cout << "beginning accept loop" << std::endl;
-			std::vector<action_items*> receivers;
-			id_type socket_id{0};
-			s.receive(socket_id);
-			EPoll epoll;
-			try {
-				epoll. template add<Socket>(std::make_unique<Socket>(std::move(s)),[&](Socket &s){
-						//std::cout << "looping " << std::endl;
-						id_type id{0};
-						size_type size{0};
-						s.receive(id);
-						s.receive(size);
-						assert(size > 0);
-						if (receivers.size() <= id){
-							receivers.resize(id + 1);
-							assert(receivers[id] == nullptr);
-						}
-						if (!receivers[id]) {
-							receivers[id] = &epoll.template add<action_items>(
-								std::make_unique<action_items>(s, socket_id, id, new_connection),
-								[](action_items &p){
-									p.action->async_tick(p.conn);
-								}
-								);
-						}
-						auto &p = *receivers[id];
-						whendebug(auto &log_file = p.log_file);
-						//std::cout << "message received" << std::endl;
-
-						char recv_buf[size];
-						whendebug(auto size_rcvd = ) s.receive(size,recv_buf);
-#ifndef NDEBUG
-						log_file << "received " << size_rcvd << "bytes" << std::endl;
-						log_file.flush();
-#endif
-						p.action->deliver_new_event(recv_buf,p.conn);
-						
-					});
-				//std::cout << "action performed" << std::endl;
-				while (server_alive) {
-					epoll.wait();
+		void receiver::receiver_state::receive_action(Socket &s){
+			//std::cout << "looping " << std::endl;
+			id_type id{0};
+			size_type size{0};
+			s.receive(id);
+			try { 
+				s.receive(size);
+				assert(size > 0);
+				if (receivers.size() <= id){
+					receivers.resize(id + 1);
+					assert(receivers[id] == nullptr);
 				}
+				if (!receivers[id]) {
+					receivers[id] = &epoll->template add<action_items>(
+						std::make_unique<action_items>(s, socket_id, id, super.new_connection),
+						[](action_items &p){
+							p.action->async_tick(p.conn);
+						}
+						);
+				}
+				auto &p = *receivers[id];
+				whendebug(auto &log_file = p.log_file);
+				//std::cout << "message received" << std::endl;
+				
+				char recv_buf[size];
+				whendebug(auto size_rcvd = ) s.receive(size,recv_buf);
 #ifndef NDEBUG
-				std::cerr << "server dead; closing sockets and exiting..." << std::endl;
+				log_file << "received " << size_rcvd << "bytes" << std::endl;
+				log_file.flush();
 #endif
+				p.action->deliver_new_event(recv_buf,p.conn);
 			}
-			catch (const ProtocolException& e){
-#ifndef NDEBUG
-				std::cerr << "socket exception encountered (" << e.what() << "), closing socket..." << std::endl;
-#endif
-				//we don't really care what this error is,
-				//destroy the socket and force everybody to
-				//re-open on the client side.
+			catch (const Timeout&){
+				assert(false && "bad bad timeout detected!");
+				throw ProtocolException{"timed out in the middle of a receive"};
 			}
-#ifndef NDEBUG
-			catch (const std::exception &e){
+			
+		}
 
-				std::cerr << "non-socket exception encountered! (" << e.what() << "), closing socket..." << std::endl;
+		void receiver::receiver_thread::accept_sockets(eventfd& fd){
+			fd.wait();
+			std::unique_ptr<receiver_state> state;
+			while (active_sockets.try_dequeue(state)){
+				assert(state);
+				receiver_state_set. template add<receiver_state>(
+					std::move(state),
+					[](receiver_state& state){
+						try{
+							state.tick();
+						}
+						catch (const Timeout&){
+							//timed out on receive, try again later.
+							//we know this timeout is on the first receive call,
+							//so we're not going to leave the socket in an inconsistent state
+						}
+					}
+					);
 			}
-			catch (...){
-				std::cerr << "non-exception exception encountered! closing socket..." << std::endl;
+		}
+		
+		void receiver::receiver_thread::tick_one(){
+			try {
+				receiver_state_set.wait();
 			}
+			catch(typename EPoll::epoll_removed_exception& whendebug(epe)){
+				//somebody threw an exception.  Assume it was the socket;
+				//don't try to fix anything just let it get cleaned up.
+#ifndef NDEBUG
+				try {
+					std::rethrow_exception(epe.ep);
+				}
+				catch (std::exception &e){
+					std::cerr << epe.what() << std::endl;
+					std::cerr << e.what() << std::endl;
+				}
+				catch(...){
+					std::cerr << "epoll threw a non-std exn!" << std::endl;
+				}
 #endif
+			}
 		}
 		
 		receiver::~receiver(){
-			*(acl.alive) = false;
+			alive = false;
 		}
 	}
 }

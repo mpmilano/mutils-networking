@@ -99,5 +99,5 @@ int main(int argc, char* argv[]){
 					int underlying_fd(){ return event_fd.underlying_fd();}
 				};
 				return action_t{new ReceiverFun{whendebug(used_connections)}};
-			}}.loop_until_false_set();
+			}}.acceptor_fun();
 }

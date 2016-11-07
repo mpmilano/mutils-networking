@@ -45,10 +45,25 @@ struct EPoll{
 			return ret;
 		}
 	};
+
+	struct epoll_removed_exception : public std::exception{
+		const std::exception_ptr ep;
+		epoll_action ea;
+		epoll_removed_exception(std::exception_ptr ep, epoll_action ea)
+			:ep(ep),ea(std::move(ea)){}
+		
+		const char* what() const noexcept {
+			return "action threw exception; item removed from epoll set and returned to caller";
+		}
+	};
 	
 	std::unordered_map<int, epoll_action> fd_lookup;
 
+	auto size() {return fd_lookup.size();}
+
 	EPoll();
+
+	int underlying_fd(){return epoll_fd;}
 
 	void wait();
 

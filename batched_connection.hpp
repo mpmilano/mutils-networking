@@ -7,6 +7,10 @@
 #include <atomic>
 #include "ServerSocket.hpp"
 #include "buffer_generator.hpp"
+#include "epoll.hpp"
+#include "readerwriterqueue.h"
+#include "better_constructable_array.hpp"
+#include "eventfd.hpp"
 
 namespace mutils {
 	namespace batched_connection {
@@ -160,6 +164,7 @@ namespace mutils {
 			using action_t = std::unique_ptr<ReceiverFun>;
 
 			using new_connection_t = std::function<action_t (whendebug(std::ofstream&)) >;
+			new_connection_t new_connection;
 
 			//Represents  a logical connection; consider it an
 			//"instance" of the action that this receiver is set up to
@@ -184,16 +189,84 @@ namespace mutils {
 				action_items(Socket &s, const id_type sid, const id_type id, new_connection_t& nc)
 					:socket_id(sid),id(id),conn(s, id whendebug(, log_file)),action(nc(whendebug(log_file))){}
 			};
-			
-			new_connection_t new_connection;
 
-			AcceptConnectionLoop acl;
+			struct receiver_state{
+				std::unique_ptr<EPoll> epoll{new EPoll()};
+				std::vector<action_items*> receivers;
+				id_type socket_id{0};
+				receiver &super;
+				void tick(){
+					epoll->wait();}
+				void receive_action(Socket &s);
+				receiver_state(Socket s, receiver &super)
+					:super(super){
+					s.receive(socket_id);
+					epoll-> template add<Socket>(
+						std::make_unique<Socket>(std::move(s)),
+						[&](Socket &s){return receive_action(s);});
+				}
+				
+				int underlying_fd() {return epoll->underlying_fd();}
+				receiver_state& operator=(receiver_state&& o){
+					assert(&super == &o.super);
+					epoll = std::move(o.epoll);
+					receivers = std::move(o.receivers);
+					return *this;
+				}
+				receiver_state(receiver_state&& o)
+					:epoll(std::move(o.epoll)),
+					 receivers(std::move(o.receivers)),
+					 super(o.super){}
+			};
+
+			constexpr static unsigned char thread_count = 16;
+
+			bool alive{true};
+			
+			struct receiver_thread{
+				receiver &super;
+				EPoll receiver_state_set;
+				receiver_thread(receiver& super)
+					:super(super),
+					 active_sockets_notify(
+						 receiver_state_set.template add<eventfd>(
+							 std::make_unique<eventfd>(),
+							 [&] (eventfd& fd){return accept_sockets(fd);} ))
+					{}
+				moodycamel::ReaderWriterQueue<std::unique_ptr<receiver_state> > active_sockets;
+				eventfd& active_sockets_notify;
+				void accept_sockets(eventfd& fd);
+				void tick_one();
+				std::thread this_thread{
+					[&]{while (super.alive)
+							tick_one();
+					}
+				};
+			};
+
+			array<receiver_thread, thread_count, receiver&> active_sockets;
 
 			void on_accept(bool& alive, Socket s);
 
-			void loop_until_false_set();
+			void acceptor_fun(){
+				using namespace std::chrono;
+				ServerSocket ss{port};
+				unsigned char last_used_list{0};
+				while (alive){
+					auto next = (last_used_list + 1)%thread_count;
+					
+					active_sockets[next].active_sockets.enqueue(
+						std::make_unique<receiver_state>(
+							Socket::set_timeout(ss.receive(),(5ms)),*this));
+					active_sockets[next].active_sockets_notify.notify();
+					last_used_list = next;
+				}
+			}
 
 			receiver(int port, new_connection_t new_connection);
+			template<std::size_t... indices>
+			receiver(std::index_sequence<indices...> const * const,
+					 int port, new_connection_t new_connection);
 			~receiver();
 		};
 	}
