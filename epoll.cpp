@@ -5,8 +5,8 @@
 
 namespace mutils{
 	
-	void EPoll::epoll_action::action() {
-		_action(epoll_obj);
+	void EPoll::epoll_action::action(EPoll& e) {
+		_action(e,epoll_obj);
 	}
 	
 	EPoll::epoll_action::epoll_action(epoll_action&& o)
@@ -43,12 +43,21 @@ namespace mutils{
 			}
 			else {
 				try{
-					fd_lookup.at(returned_events.at(i).data.fd).action();
+					fd_lookup.at(returned_events.at(i).data.fd).action(*this);
+				}
+				catch (const std::out_of_range&){
+					auto key = returned_events.at(i).data.fd;
+					event.data.fd = key;
+					event.events = EPOLLIN;
+					epoll_ctl (epoll_fd, EPOLL_CTL_DEL, key, &event);
 				}
 				catch(...){
 					auto key = returned_events.at(i).data.fd;
 					epoll_action returned = std::move(fd_lookup.at(key));
 					fd_lookup.erase(key);
+					event.data.fd = key;
+					event.events = EPOLLIN;
+					epoll_ctl (epoll_fd, EPOLL_CTL_DEL, key, &event);
 					throw epoll_removed_exception{
 						std::current_exception(),
 							std::move(returned)};

@@ -24,14 +24,14 @@ struct EPoll{
 		
 		void * epoll_obj;
 		const delete_fp_t delete_epoll_obj;
-		const std::function<void (void*)> _action;
-		void action();
+		const std::function<void (EPoll&, void*)> _action;
+		void action(EPoll&);
 
 		template<typename FDType>
-		epoll_action(std::unique_ptr<FDType> resource, std::function<void (FDType&)> action)
+		epoll_action(std::unique_ptr<FDType> resource, std::function<void (EPoll&, FDType&)> action)
 			:epoll_obj(resource.release()),
 			 delete_epoll_obj(delete_epoll_obj_specific<FDType>),
-			 _action([action](void* epoll_obj) {if (epoll_obj) return action(*((FDType*) epoll_obj));}) {}
+			 _action([action](EPoll& e,void* epoll_obj) {if (epoll_obj) return action(e,*((FDType*) epoll_obj));}) {}
 
 		epoll_action(const epoll_action&) = delete;
 		epoll_action(epoll_action&& o);
@@ -68,7 +68,7 @@ struct EPoll{
 	void wait();
 
 	template<typename FDType>
-	FDType& add(std::unique_ptr<FDType> new_fd, std::function<void (FDType&)> action){
+	FDType& add(std::unique_ptr<FDType> new_fd, std::function<void (EPoll&,FDType&)> action){
 		using namespace std;
 		auto infd = new_fd->underlying_fd();
 		event.data.fd = infd;

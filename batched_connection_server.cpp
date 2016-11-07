@@ -34,7 +34,7 @@ namespace mutils{
 				 //std::cout << "receiving on port: " << port << std::endl;
 			 }
 
-		void receiver::receiver_state::receive_action(Socket &s){
+		void receiver::receiver_state::receive_action(EPoll& epoll){
 			//std::cout << "looping " << std::endl;
 			id_type id{0};
 			size_type size{0};
@@ -47,9 +47,9 @@ namespace mutils{
 					assert(receivers[id] == nullptr);
 				}
 				if (!receivers[id]) {
-					receivers[id] = &epoll->template add<action_items>(
+					receivers[id] = &epoll.template add<action_items>(
 						std::make_unique<action_items>(s, socket_id, id, super.new_connection),
-						[](action_items &p){
+						[](EPoll&, action_items &p){
 							p.action->async_tick(p.conn);
 						}
 						);
@@ -73,24 +73,39 @@ namespace mutils{
 			
 		}
 
+		receiver::receiver_state::receiver_state(Socket s, id_type sid, receiver &super)
+			:s(std::move(s)),
+			 socket_id(sid),
+			 super(super){}
+
+		receiver::receiver_thread::receiver_thread(receiver& super)
+			:super(super),
+			 active_sockets_notify(
+				 receiver_state_set.template add<eventfd>(
+					 std::make_unique<eventfd>(),
+					 [&] (EPoll&, eventfd& fd){return accept_sockets(fd);} ))
+		{}
+
+		void receiver::receiver_thread::register_receiver_state(Socket s) {
+			id_type socket_id{0};
+			s.receive(socket_id);
+			receiver_state_set. template add<receiver_state>(
+				std::make_unique<receiver_state>(
+					Socket::set_timeout(std::move(s),std::chrono::milliseconds(5)),
+					socket_id, super),
+				[](EPoll& ep, receiver_state& rs){
+					try {
+						rs.receive_action(ep);
+					} catch(const Timeout&){/*try again later*/}
+				});
+		}
+		
 		void receiver::receiver_thread::accept_sockets(eventfd& fd){
 			fd.wait();
-			std::unique_ptr<receiver_state> state;
-			while (active_sockets.try_dequeue(state)){
-				assert(state);
-				receiver_state_set. template add<receiver_state>(
-					std::move(state),
-					[](receiver_state& state){
-						try{
-							state.tick();
-						}
-						catch (const Timeout&){
-							//timed out on receive, try again later.
-							//we know this timeout is on the first receive call,
-							//so we're not going to leave the socket in an inconsistent state
-						}
-					}
-					);
+			std::unique_ptr<Socket> sock;
+			while (active_sockets.try_dequeue(sock)){
+				assert(sock);
+				register_receiver_state(std::move(*sock));
 			}
 		}
 		
@@ -113,6 +128,20 @@ namespace mutils{
 					std::cerr << "epoll threw a non-std exn!" << std::endl;
 				}
 #endif
+			}
+		}
+
+		void receiver::acceptor_fun(){
+			using namespace std::chrono;
+			ServerSocket ss{port};
+			unsigned char last_used_list{0};
+			while (alive){
+				auto next = (last_used_list + 1)%thread_count;
+				
+				active_sockets[next].active_sockets.enqueue(
+					std::make_unique<Socket>(ss.receive()));
+				active_sockets[next].active_sockets_notify.notify();
+				last_used_list = next;
 			}
 		}
 		

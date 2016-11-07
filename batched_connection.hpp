@@ -191,32 +191,13 @@ namespace mutils {
 			};
 
 			struct receiver_state{
-				std::unique_ptr<EPoll> epoll{new EPoll()};
+				Socket s;
 				std::vector<action_items*> receivers;
-				id_type socket_id{0};
+				const id_type socket_id;
 				receiver &super;
-				void tick(){
-					epoll->wait();}
-				void receive_action(Socket &s);
-				receiver_state(Socket s, receiver &super)
-					:super(super){
-					s.receive(socket_id);
-					epoll-> template add<Socket>(
-						std::make_unique<Socket>(Socket::set_timeout(std::move(s),std::chrono::milliseconds(5))),
-						[&](Socket &s){return receive_action(s);});
-				}
-				
-				int underlying_fd() {return epoll->underlying_fd();}
-				receiver_state& operator=(receiver_state&& o){
-					assert(&super == &o.super);
-					epoll = std::move(o.epoll);
-					receivers = std::move(o.receivers);
-					return *this;
-				}
-				receiver_state(receiver_state&& o)
-					:epoll(std::move(o.epoll)),
-					 receivers(std::move(o.receivers)),
-					 super(o.super){}
+				int underlying_fd() {return s.underlying_fd();}
+				void receive_action(EPoll&);
+				receiver_state(Socket s, id_type sid, receiver &super);
 			};
 
 			constexpr static unsigned char thread_count = 16;
@@ -226,14 +207,11 @@ namespace mutils {
 			struct receiver_thread{
 				receiver &super;
 				EPoll receiver_state_set;
-				receiver_thread(receiver& super)
-					:super(super),
-					 active_sockets_notify(
-						 receiver_state_set.template add<eventfd>(
-							 std::make_unique<eventfd>(),
-							 [&] (eventfd& fd){return accept_sockets(fd);} ))
-					{}
-				moodycamel::ReaderWriterQueue<std::unique_ptr<receiver_state> > active_sockets;
+				receiver_thread(receiver& super);
+
+				void register_receiver_state(Socket s);
+				
+				moodycamel::ReaderWriterQueue<std::unique_ptr<Socket> > active_sockets;
 				eventfd& active_sockets_notify;
 				void accept_sockets(eventfd& fd);
 				void tick_one();
@@ -246,21 +224,7 @@ namespace mutils {
 
 			array<receiver_thread, thread_count, receiver&> active_sockets;
 
-			void on_accept(bool& alive, Socket s);
-
-			void acceptor_fun(){
-				using namespace std::chrono;
-				ServerSocket ss{port};
-				unsigned char last_used_list{0};
-				while (alive){
-					auto next = (last_used_list + 1)%thread_count;
-					
-					active_sockets[next].active_sockets.enqueue(
-						std::make_unique<receiver_state>(ss.receive(),*this));
-					active_sockets[next].active_sockets_notify.notify();
-					last_used_list = next;
-				}
-			}
+			void acceptor_fun();
 
 			receiver(int port, new_connection_t new_connection);
 			template<std::size_t... indices>
