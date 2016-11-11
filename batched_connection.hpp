@@ -134,12 +134,13 @@ namespace mutils {
 		//which must return action functions.  On receipt of a message,
 		//the action funciton is called.  There is a unique action function
 		//(produced by a separate call to new_connection) per logical connection.
-
-		using rpc::new_connection_t;
-		using rpc::action_t;
+		
 		using rpc::ReceiverFun;
 		
 		struct receiver {
+
+			using new_connection_t = rpc::new_connection_t;
+			using action_t = rpc::action_t;
 			
 			//returns expected next message size
 			struct connection : public ::mutils::connection {

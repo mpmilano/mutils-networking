@@ -17,11 +17,6 @@ namespace mutils{
 #endif
 			close(sockID);
 		}
-#ifndef NDEBUG
-		else {
-			std::cerr << "socket moved" << std::endl;
-		}
-#endif
 	}
 	
 	Socket::Socket(int sockID):

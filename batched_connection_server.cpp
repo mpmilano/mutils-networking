@@ -66,13 +66,6 @@ namespace mutils{
 					log_file.flush();
 #endif
 					p.action->deliver_new_event(recv_buf);
-				} else {
-					//this was an initialization message, so we might be getting another one!
-					bool more_to_come{false};
-					s.receive(more_to_come);
-					if (more_to_come){
-						receive_action(epoll);
-					}
 				}
 			}
 			catch (const Timeout&){

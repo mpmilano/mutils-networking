@@ -47,6 +47,12 @@ namespace mutils{
 			 
 		
 		std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
+		bool valid() const {
+			return i->data->valid() && i->control->valid();
+		}
+		std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const v) {
+			return i->data->raw_send(how_many,sizes,v);
+		}
 	};
 
 	template<typename ConnectionManager>
@@ -61,6 +67,8 @@ namespace mutils{
 			:cm(std::forward<Args>(a)...){}
 
 		dual_connection spawn(){
+			//use of this spawning technique is safe only because
+			//the control channel (constructed first) never gets ticked
 			auto l = cm.spawn(2);
 			using subconn = std::decay_t<decltype(l.front())>;
 			return dual_connection{
@@ -119,6 +127,7 @@ namespace mutils{
 		control_state(control_state_p& parent, ::mutils::connection& c)
 		:last_control_state(parent),c(c)
 			{
+				std::cout << "control state constructed" << std::endl;
 				last_control_state = this;
 			}
 
@@ -140,6 +149,7 @@ namespace mutils{
 		data_state(whendebug(std::ofstream &log_file,) new_dualstate_t f, control_state_p& parent, ::mutils::connection& c)
 			:last_control_state(parent),dw(f(whendebug(log_file,) c, sibling.c ) ){
 			last_control_state = nullptr;
+			std::cout << "setting sibling" << std::endl;
 			sibling.sibling = this;
 		}
 		
@@ -162,7 +172,7 @@ namespace mutils{
 
 	template<typename r>
 	dual_connection_receiver<r>::dual_connection_receiver(int port, new_dualstate_t f)
-		:r(port,[&](whendebug(std::ofstream &log_file,)
+		:r(port,[f,this](whendebug(std::ofstream &log_file,)
 					::mutils::connection &c) -> std::unique_ptr<rpc::ReceiverFun>{
 					if (!last_control_state){
 						return std::unique_ptr<rpc::ReceiverFun>

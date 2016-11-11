@@ -45,12 +45,12 @@ namespace mutils{
 	dual_connection::Internals::Internals(std::unique_ptr<connection> data, std::unique_ptr<connection> control)
 			:data(std::move(data)),
 			 control(std::move(control)),
-			 check_control_fun([&](int) -> char { 
+			 check_control_fun([this](int) -> char { 
 					 char first_byte;
 					 constexpr const std::size_t how_many = 1;
 					 void* bufs[] = {&first_byte};
-					 control->raw_receive(how_many,&how_many,bufs);
-					 control_exn_thrown = true;
+					 this->control->raw_receive(how_many,&how_many,bufs);
+					 this->control_exn_thrown = true;
 					 return first_byte;
 				 }),
 			 exn_first_byte(check_control_exn.push(check_control_fun))

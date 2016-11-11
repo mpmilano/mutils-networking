@@ -147,7 +147,7 @@ namespace mutils{
 			using namespace std::chrono;
 			const auto expected_size = total_size(how_many, sizes);
 #ifndef NDEBUG
-			log_file << "processing new receive" << std::endl;
+			log_file << "processing new receive, expect total size " << expected_size << std::endl;
 			log_file.flush();
 #endif
 			while (true){
@@ -245,6 +245,7 @@ namespace mutils{
 		}
 
 		std::list<connection> connections::spawn(std::size_t N){
+			std::cout << "spawning " << N << " connections" << std::endl;
 			auto &_i = i->_this;
 			auto my_id = ++_i.current_connection_id;
 			auto &my_socket = _i.bundles.at(my_id% _i.modulus);
@@ -255,12 +256,11 @@ namespace mutils{
 				++my_socket->unused_id;
 				ret.emplace_back(*my_socket,conn_id);
 				//send just the ID and size, resulting in initialization
-				//on the server end.  This avoid the race-condition in
-				//initialization which we were worried about in dual_connection
-				bool more_to_come = (cntr + 1) < N;
-				const void* bbuf = &more_to_come;
-				const std::size_t one = sizeof(bool);
-				ret.back().raw_send(1,&one,&bbuf);
+				//on the server end.
+
+				//remember that other users of this underlying socket
+				//can communicate while you setup!
+				ret.back().raw_send(0,nullptr,nullptr);
 			}
 			return ret;
 		}
