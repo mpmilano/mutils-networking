@@ -1,6 +1,6 @@
 #pragma once
 #include "connection.hpp"
-#include "epoll.hpp"
+#include "eventfd.hpp"
 #include "rpc_api.hpp"
 #include "SimpleConcurrentMap.hpp"
 #include "ctpl_stl.h"
@@ -37,16 +37,9 @@ namespace mutils{
 			ctpl::thread_pool check_control_exn{1};
 			std::function<char (int) > check_control_fun;
 			std::future<char> exn_first_byte;
-			Internals(std::unique_ptr<connection> data,
-					  std::unique_ptr<connection> control,
-					  std::function<char (int) > check_control_fun,
-					  std::future<char> exn_first_byte)
-				:data(std::move(data)),
-				 control(std::move(control)),
-				 check_control_fun(std::move(check_control_fun)),
-				 exn_first_byte(std::move(exn_first_byte)){}
+			Internals(std::unique_ptr<connection> data, std::unique_ptr<connection> control);
 		};
-		Internals i;
+		std::unique_ptr<Internals> i;
 			
 		dual_connection(std::unique_ptr<connection> data, std::unique_ptr<connection> control);
 		dual_connection(const dual_connection&) = delete;
@@ -91,12 +84,15 @@ namespace mutils{
 		//where a "read" ready indicates it's time to
 		//call async_tick
 		virtual int underlying_fd() = 0;
-		virtual ~dual_state(){}
+		virtual ~dual_state_receiver(){}
 	};
 
 	using dualstate_action_t = std::unique_ptr<dual_state_receiver>;
 	using new_dualstate_t = std::function<dualstate_action_t (whendebug(std::ofstream&,) connection& data, connection& control)>;
-		
+
+
+	struct control_state;
+	
 	//assuming synhronous initialization in the order
 	//control, data, control, data
 	template<typename receiver>
@@ -109,61 +105,46 @@ namespace mutils{
 			r.acceptor_fun();
 		}
 		
-		dual_connection_receiver(int port, new_dualstate_t f)
-			:r(port,[&](::mutils::connection &c) -> std::unique_ptr<ReceiverFun>{
-					if (!last_control_state){
-						return control_state{last_control_state,c};
-					}
-					else return data_state{last_control_state,c};
-				})
-			{}
+		dual_connection_receiver(int port, new_dualstate_t f);
 	};
-
-	struct control_state;
 	using control_state_p = control_state*;
+	struct data_state;
 
-	struct control_state : public ReceiverFun {
+	struct control_state : public rpc::ReceiverFun {
 		control_state_p& last_control_state;
 		data_state* sibling{nullptr};
 		::mutils::connection& c;
 		eventfd block_forever;
 		
 		control_state(control_state_p& parent, ::mutils::connection& c)
-			:last_control_state(parent),c(c)
+		:last_control_state(parent),c(c)
 			{
 				last_control_state = this;
 			}
 
 		//this *must* be wait-free.  We're calling it in the receive thread!
-		void deliver_new_event(const void* v){
-			sibling.dw->deliver_new_control_event(v);
-		}
+		void deliver_new_event(const void* v);
 		
-		void async_tick() {
-			//This async_tick doesn't do anything;
-			//it will definitely never be called
-		}
+		void async_tick();
 
-		int underlying_fd(){
-			return block_forever.underlying_fd();
-		}
+		int underlying_fd();
 
 	};
 
-	struct data_state : public ReceiverFun{
+	struct data_state : public rpc::ReceiverFun{
 
 		control_state_p &last_control_state;
 		control_state& sibling{*last_control_state};
 		std::unique_ptr<dual_state_receiver> dw;
 		
-		single_state(whendebug(std::ofstream &log_file,) new_dualstate_t f, control_state_p& parent, ::mutils::connection& c)
+		data_state(whendebug(std::ofstream &log_file,) new_dualstate_t f, control_state_p& parent, ::mutils::connection& c)
 			:last_control_state(parent),dw(f(whendebug(log_file,) c, sibling.c ) ){
 			last_control_state = nullptr;
 			sibling.sibling = this;
 		}
 		
 		//this *must* be wait-free.  We're calling it in the receive thread!
-		void deliver_new_event(const void*){
+		void deliver_new_event(const void* v){
 			dw->deliver_new_data_event(v);
 			
 		}
@@ -178,5 +159,18 @@ namespace mutils{
 			return dw->underlying_fd();
 		}
 	};
+
+	template<typename r>
+	dual_connection_receiver<r>::dual_connection_receiver(int port, new_dualstate_t f)
+		:r(port,[&](whendebug(std::ofstream &log_file,)
+					::mutils::connection &c) -> std::unique_ptr<rpc::ReceiverFun>{
+					if (!last_control_state){
+						return std::unique_ptr<rpc::ReceiverFun>
+						{new control_state{last_control_state,c}};
+					}
+					else return std::unique_ptr<rpc::ReceiverFun>
+						 {new data_state{whendebug(log_file,)f,last_control_state,c}};
+				})
+			{}
 
 }
