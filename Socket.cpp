@@ -7,6 +7,7 @@
 #include <netdb.h>
 #include <thread>
 #include <netinet/tcp.h>
+#include <cstring>
 								
 namespace mutils{
 
@@ -95,6 +96,9 @@ namespace mutils{
 		if (ret == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)){
 			throw Timeout{};
 		}
+                else if(ret == -1){
+                    throw ProtocolException{std::strerror(errno)};
+                }
 		else return ret;
 	}
 
