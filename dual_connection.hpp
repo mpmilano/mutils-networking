@@ -4,6 +4,7 @@
 #include "rpc_api.hpp"
 #include "SimpleConcurrentMap.hpp"
 #include "ctpl_stl.h"
+#include "interruptible_connection.hpp"
 
 namespace mutils{
 
@@ -31,17 +32,17 @@ namespace mutils{
 
 	struct dual_connection : public connection{
 		struct Internals{
-			std::unique_ptr<connection> data;
-			std::unique_ptr<connection> control;
+			std::unique_ptr<interruptible_connection> data;
+			std::unique_ptr<interruptible_connection> control;
 			std::atomic_bool control_exn_thrown{false};
 			ctpl::thread_pool check_control_exn{1};
 			std::function<char (int) > check_control_fun;
 			std::future<char> exn_first_byte;
-			Internals(std::unique_ptr<connection> data, std::unique_ptr<connection> control);
+			Internals(std::unique_ptr<interruptible_connection> data, std::unique_ptr<interruptible_connection> control);
 		};
 		std::unique_ptr<Internals> i;
 			
-		dual_connection(std::unique_ptr<connection> data, std::unique_ptr<connection> control);
+		dual_connection(std::unique_ptr<interruptible_connection> data, std::unique_ptr<interruptible_connection> control);
 		dual_connection(const dual_connection&) = delete;
 		dual_connection(dual_connection&& o);
 			 
@@ -59,7 +60,7 @@ namespace mutils{
 	struct dual_connection_manager {
 		ConnectionManager cm;
 		using connection = std::decay_t<decltype(cm.spawn())>;
-		static_assert(std::is_base_of<::mutils::connection,connection>::value,
+		static_assert(std::is_base_of<interruptible_connection,connection>::value,
 					  "Error: ConnectionManager does not have a spawn() method which supplies connections");
 		
 		template<typename... Args>
@@ -72,8 +73,8 @@ namespace mutils{
 			auto l = cm.spawn(2);
 			using subconn = std::decay_t<decltype(l.front())>;
 			return dual_connection{
-				std::unique_ptr<connection>(new subconn(std::move(l.back()))),
-					std::unique_ptr<connection>(new subconn(std::move(l.front())))
+				std::unique_ptr<interruptible_connection>(new subconn(std::move(l.back()))),
+					std::unique_ptr<interruptible_connection>(new subconn(std::move(l.front())))
 					};
 		}
 	};

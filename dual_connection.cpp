@@ -39,10 +39,11 @@ namespace mutils{
 			parent.i->control_exn_thrown = false;
 			assert(parent.i->check_control_exn.n_idle() == 1);
 			parent.i->exn_first_byte = parent.i->check_control_exn.push(parent.i->check_control_fun);
+			parent.i->data->clear_interrupt();
 		}
 
 
-	dual_connection::Internals::Internals(std::unique_ptr<connection> data, std::unique_ptr<connection> control)
+	dual_connection::Internals::Internals(std::unique_ptr<interruptible_connection> data, std::unique_ptr<interruptible_connection> control)
 			:data(std::move(data)),
 			 control(std::move(control)),
 			 check_control_fun([this](int) -> char { 
@@ -51,12 +52,13 @@ namespace mutils{
 					 void* bufs[] = {&first_byte};
 					 this->control->raw_receive(how_many,&how_many,bufs);
 					 this->control_exn_thrown = true;
+					 this->data->interrupt();
 					 return first_byte;
 				 }),
 			 exn_first_byte(check_control_exn.push(check_control_fun))
 			 {}//*/
 
-	dual_connection::dual_connection(std::unique_ptr<connection> data, std::unique_ptr<connection> control)
+	dual_connection::dual_connection(std::unique_ptr<interruptible_connection> data, std::unique_ptr<interruptible_connection> control)
 		:i(new Internals(std::move(data),std::move(control))){}
 
 	dual_connection::dual_connection(dual_connection&& o)
@@ -71,7 +73,14 @@ namespace mutils{
 				//and will also re-start the thread that checks for whether the channel is throwing an exception.
 				throw ControlChannel{*this,first_byte};
 			}
-			else return i->data->raw_receive(how_many,sizes,bufs);
+			else try {
+					return i->data->raw_receive(how_many,sizes,bufs);
+				}
+				catch (const ReadInterruptedException&){
+					//this means we must have gotten a response on the control channel.
+					assert(i->control_exn_thrown);
+					throw ControlChannel{*this,i->exn_first_byte.get()};
+				}
 		}
 	
 	//this *must* be wait-free.  We're calling it in the receive thread!

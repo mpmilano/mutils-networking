@@ -9,6 +9,7 @@
 #include "buffer_generator.hpp"
 #include "epoll.hpp"
 #include "readerwriterqueue.h"
+#include "interruptible_connection.hpp"
 #include "better_constructable_array.hpp"
 #include "eventfd.hpp"
 #include "rpc_api.hpp"
@@ -70,10 +71,11 @@ namespace mutils {
 			SocketBundle(SocketBundle&&) = delete;
 		};
 		
-		struct connection : public ::mutils::connection {
+		struct connection : public interruptible_connection {
 			SocketBundle& sock;
 			
 			const id_type id;
+			bool interrupted{false};
 #ifndef NDEBUG
 			std::ofstream log_file{[&](){
 					std::stringstream ss;
@@ -94,10 +96,16 @@ namespace mutils {
 			locked_socket_t from_network (locked_socket_t l,
 										  size_type expected_size, buf_ptr from,
 										  size_type offset);
+			std::size_t handle_oversized_request(std::size_t how_many,
+												 std::size_t const * const sizes,
+												 void ** bufs,
+												 buf_ptr msg);
 		public:
 			std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
 			std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const);
 			bool valid () const {return sock.sock.valid();}
+			void interrupt() {interrupted = true;}
+			void clear_interrupt() {interrupted = false;}
 			
 			template<typename... T> auto receive(T&& ... t){
 				::mutils::connection& _this = *this;

@@ -143,6 +143,51 @@ namespace mutils{
 			return returned_l;
 		};
 
+		std::size_t connection::handle_oversized_request(std::size_t how_many, std::size_t const * const sizes, void ** bufs, buf_ptr msg){
+			assert(false && "this is untested and known to be non-atomic; if a connection is interrupted while this function is running, that interrupt will result in partially-full buffers!");
+			//though, we could probably just punt the problem away by having the ReadInterruptedException take a number
+			//of bytes read in its constructor...
+			struct dead_code{}; throw dead_code{};
+			auto available_size = msg.size();
+			assert(available_size > 0);
+			//we don't have everything we need right now; copy what we have and keep at it.
+			std::size_t how_many_available = 0;
+			std::size_t final_bin_size = 0;
+			{
+				std::size_t used_allocation = 0;
+				for (std::size_t indx = 0; indx < how_many; ++indx){
+					++how_many_available;
+					used_allocation += sizes[indx];
+					if (used_allocation >= available_size){
+						final_bin_size = sizes[indx] - (used_allocation - available_size);
+						assert(final_bin_size > 0);
+						break;
+					}
+				}
+			}
+			assert(final_bin_size > 0);
+			std::size_t sizes_available[how_many_available];
+			memcpy(sizes_available,sizes,(how_many_available - 1)* sizeof(std::size_t));
+			sizes_available[how_many_available - 1] = final_bin_size;
+			copy_into(how_many_available,sizes_available,bufs,(char*)msg.payload);
+			
+			std::size_t initial_leftover = sizes[how_many_available - 1] - sizes_available[how_many_available - 1];
+			std::size_t how_many_leftover = (initial_leftover > 0 ? 1 : 0) + how_many - how_many_available;
+			std::size_t sizes_leftover[how_many_leftover];
+			void* bufs_leftover[how_many_leftover];
+			if (initial_leftover > 0){
+				sizes_leftover[0] = initial_leftover;
+				bufs_leftover[0] = ((char*)bufs[how_many_available-1]) + final_bin_size;
+				memcpy(sizes_leftover +1, sizes + how_many_available, sizeof(std::size_t)*(how_many_leftover -1));
+				memcpy(bufs_leftover +1, bufs + how_many_available, how_many_leftover -1);
+			}
+			else {
+				memcpy(sizes_leftover, sizes + how_many_available, sizeof(std::size_t)*how_many_leftover);
+				memcpy(bufs_leftover, bufs + how_many_available, how_many_leftover);
+			}
+			return available_size + raw_receive(how_many_leftover,sizes_leftover,bufs_leftover);
+		}
+
 		std::size_t connection::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
 			using namespace std::chrono;
 			const auto expected_size = total_size(how_many, sizes);
@@ -150,7 +195,7 @@ namespace mutils{
 			log_file << "processing new receive, expect total size " << expected_size << std::endl;
 			log_file.flush();
 #endif
-			while (true){
+			while (!interrupted){
 #ifndef NDEBUG
 				log_file << "iterating new receive" << std::endl;
 #endif
@@ -159,14 +204,17 @@ namespace mutils{
 					assert(my_queue.queue.size() > 0);
 					auto msg = std::move(my_queue.queue.front());
 					my_queue.queue.pop_front();
-#ifndef NDEBUG
-					if (msg.size() != expected_size){
-						std::cerr << msg.size() << std::endl;
-						std::cerr << expected_size << std::endl;
+					if (msg.size() >= expected_size){
+						copy_into(how_many,sizes,bufs,(char*)msg.payload);
+						if (msg.size() > expected_size){
+							//some message remains, put it back onto the front of this queue.
+							my_queue.queue.push_front(msg.split(expected_size));
+						}
 					}
-					assert(msg.size() == expected_size);
-#endif
-					copy_into(how_many,sizes,bufs,(char*)msg.payload);
+					else {
+						l.unlock();
+						return handle_oversized_request(how_many,sizes,bufs, std::move(msg));
+					}
 #ifndef NDEBUG
 					log_file << "found message of size " << msg.size() << " (expected " << expected_size << ") "
 							 << "waiting in incoming queue" << std::endl;
@@ -174,7 +222,7 @@ namespace mutils{
 #endif
 					return expected_size;
 				}
-				else if (auto l = sock.socket_lock.lock_or_abort([&]{return (my_queue.queue.size() > 0);})) {
+				else if (auto l = sock.socket_lock.lock_or_abort([&]{return interrupted || (my_queue.queue.size() > 0);})) {
 					assert(l);
 					//it would be a bad bug if somehow we had a message ready
 #ifndef NDEBUG
@@ -218,6 +266,10 @@ namespace mutils{
 					}
 				}
 			}
+			//only way to get here?
+			//interrupted was true in condition
+			interrupted = false;
+			throw ReadInterruptedException{};
 		}
 
 		
