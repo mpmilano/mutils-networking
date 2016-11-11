@@ -22,6 +22,8 @@ namespace mutils{
 		std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs);
 		
 		bool valid () const ;
+
+		whendebug(std::ofstream& get_log_file();)
 		
 		const char* what() const noexcept;
 		
@@ -42,7 +44,12 @@ namespace mutils{
 		dual_connection(std::unique_ptr<interruptible_connection> data, std::unique_ptr<interruptible_connection> control);
 		dual_connection(const dual_connection&) = delete;
 		dual_connection(dual_connection&& o);
-			 
+
+#ifndef NDEBUG
+		std::ofstream& get_log_file(){
+			return i->data->get_log_file();
+		}
+#endif
 		
 		std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
 		bool valid() const {

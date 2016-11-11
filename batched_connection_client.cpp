@@ -274,6 +274,7 @@ namespace mutils{
 
 		
 		std::size_t connection::raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs){
+			whendebug(log_file << "sending (raw) " << total_size(how_many,sizes) << " bytes"; log_file.flush());
 			return send_with_id(whendebug(log_file,) sock.sock,id,how_many,sizes,bufs,total_size(how_many, sizes));
 		}
 

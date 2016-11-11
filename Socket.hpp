@@ -71,6 +71,10 @@ namespace mutils{
 			connection& _this = *this;
 			return _this.send(std::forward<T>(t)...);
 		}
+
+#ifndef NDEBUG
+		std::ofstream& get_log_file(){assert(false && "no logs on raw sockets, sorry");}
+#endif
 		
 		std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs);
 		std::size_t peek(std::size_t how_many, std::size_t const * const sizes, void ** bufs);

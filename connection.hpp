@@ -1,5 +1,6 @@
 #pragma once
 #include <memory>
+#include <fstream>
 #include "SerializationSupport.hpp"
 #include "extras"
 
@@ -11,8 +12,9 @@ struct connection{
 	virtual std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs) = 0;
 	virtual std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const) = 0;
 
-	
-	
+#ifndef NDEBUG
+	virtual std::ofstream& get_log_file() = 0;
+#endif
 	template<typename... T>
 	void receive(T&... t){
 		static_assert(forall_nt(std::is_pod<T>::value...),

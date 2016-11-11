@@ -15,6 +15,12 @@ namespace mutils{
 		}
 		
 		bool ControlChannel::valid () const {return parent.i->control->valid();}
+
+#ifndef NDEBUG
+	std::ofstream& ControlChannel::get_log_file(){
+		return parent.i->control->get_log_file();
+	}
+#endif
 		
 		const char* ControlChannel::what() const noexcept {
 			return "Received control channel message: likely indicates protocol exception";
