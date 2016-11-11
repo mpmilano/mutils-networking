@@ -41,7 +41,6 @@ namespace mutils{
 			s.receive(id);
 			try { 
 				s.receive(size);
-				assert(size > 0);
 				if (receivers.size() <= id){
 					receivers.resize(id + 1);
 					assert(receivers[id] == nullptr);
@@ -50,21 +49,31 @@ namespace mutils{
 					receivers[id] = &epoll.template add<action_items>(
 						std::make_unique<action_items>(s, socket_id, id, super.new_connection),
 						[](EPoll&, action_items &p){
-							p.action->async_tick(p.conn);
+							p.action->async_tick();
 						}
 						);
 				}
-				auto &p = *receivers[id];
-				whendebug(auto &log_file = p.log_file);
-				//std::cout << "message received" << std::endl;
-				
-				char recv_buf[size];
-				whendebug(auto size_rcvd = ) s.receive(size,recv_buf);
+				//size == 0 when, for example, initializing several connections at once.
+				if (size > 0){
+					auto &p = *receivers[id];
+					whendebug(auto &log_file = p.log_file);
+					//std::cout << "message received" << std::endl;
+					
+					char recv_buf[size];
+					whendebug(auto size_rcvd = ) s.receive(size,recv_buf);
 #ifndef NDEBUG
-				log_file << "received " << size_rcvd << "bytes" << std::endl;
-				log_file.flush();
+					log_file << "received " << size_rcvd << "bytes" << std::endl;
+					log_file.flush();
 #endif
-				p.action->deliver_new_event(recv_buf,p.conn);
+					p.action->deliver_new_event(recv_buf);
+				} else {
+					//this was an initialization message, so we might be getting another one!
+					bool more_to_come{false};
+					s.receive(more_to_come);
+					if (more_to_come){
+						receive_action(epoll);
+					}
+				}
 			}
 			catch (const Timeout&){
 				assert(false && "bad bad timeout detected!");

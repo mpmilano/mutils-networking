@@ -11,6 +11,7 @@
 #include "readerwriterqueue.h"
 #include "better_constructable_array.hpp"
 #include "eventfd.hpp"
+#include "rpc_api.hpp"
 
 namespace mutils {
 	namespace batched_connection {
@@ -120,7 +121,9 @@ namespace mutils {
 			connections(const int ip, const int port, const int max_connections);
 			
 			connections(const connections&) = delete;
-			
+
+			//spawns N connections over the same physical link.
+			std::list<connection> spawn(std::size_t N);
 			connection spawn();
 			~connections();
 		};
@@ -132,17 +135,9 @@ namespace mutils {
 		//the action funciton is called.  There is a unique action function
 		//(produced by a separate call to new_connection) per logical connection.
 
-		struct ReceiverFun {
-			//this *must* be wait-free.  We're calling it in the receive thread!
-			virtual void deliver_new_event(const void*, ::mutils::connection&) = 0;
-			//this *must* be wait-free.  We're calling it in the receive thread!
-			virtual void async_tick(::mutils::connection&) = 0;
-			//must be able to select() on this int as an FD
-			//where a "read" ready indicates it's time to
-			//call async_tick
-			virtual int underlying_fd() = 0;
-			virtual ~ReceiverFun(){}
-		};
+		using rpc::new_connection_t;
+		using rpc::action_t;
+		using rpc::ReceiverFun;
 		
 		struct receiver {
 			
@@ -161,10 +156,7 @@ namespace mutils {
 			// physical TCP port
 			const int port;
 			//function to call when new messages come in.
-			using action_t = std::unique_ptr<ReceiverFun>;
-
-			using new_connection_t = std::function<action_t (whendebug(std::ofstream&)) >;
-			new_connection_t new_connection;
+			rpc::new_connection_t new_connection;
 
 			//Represents  a logical connection; consider it an
 			//"instance" of the action that this receiver is set up to
@@ -187,7 +179,7 @@ namespace mutils {
 				std::mutex mut;
 				action_items() = default;
 				action_items(Socket &s, const id_type sid, const id_type id, new_connection_t& nc)
-					:socket_id(sid),id(id),conn(s, id whendebug(, log_file)),action(nc(whendebug(log_file))){}
+					:socket_id(sid),id(id),conn(s, id whendebug(, log_file)),action(nc(whendebug(log_file,) conn)){}
 			};
 
 			struct receiver_state{

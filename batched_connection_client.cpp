@@ -244,6 +244,27 @@ namespace mutils{
 			return connection{*my_socket,conn_id};
 		}
 
+		std::list<connection> connections::spawn(std::size_t N){
+			auto &_i = i->_this;
+			auto my_id = ++_i.current_connection_id;
+			auto &my_socket = _i.bundles.at(my_id% _i.modulus);
+			std::list<connection> ret;
+			for (std::size_t cntr = 0; cntr < N; ++cntr)
+			{
+				id_type conn_id = my_socket->unused_id;
+				++my_socket->unused_id;
+				ret.emplace_back(*my_socket,conn_id);
+				//send just the ID and size, resulting in initialization
+				//on the server end.  This avoid the race-condition in
+				//initialization which we were worried about in dual_connection
+				bool more_to_come = (cntr + 1) < N;
+				const void* bbuf = &more_to_come;
+				const std::size_t one = sizeof(bool);
+				ret.back().raw_send(1,&one,&bbuf);
+			}
+			return ret;
+		}
+
 		connections::connections(const int ip, const int port, const int max_connections)
 			:i(new Internals(ip,port,max_connections)){}
 	
