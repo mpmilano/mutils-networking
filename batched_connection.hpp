@@ -75,7 +75,7 @@ namespace mutils {
 			SocketBundle& sock;
 			
 			const id_type id;
-			bool interrupted{false};
+			std::shared_ptr<std::atomic_bool> interrupted{new std::atomic_bool(false)};
 #ifndef NDEBUG
 			std::ofstream log_file{[&](){
 					std::stringstream ss;
@@ -104,8 +104,8 @@ namespace mutils {
 			std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
 			std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const);
 			bool valid () const {return sock.sock.valid();}
-			void interrupt() {interrupted = true;}
-			void clear_interrupt() {interrupted = false;}
+			void interrupt() {*interrupted = true;}
+			void clear_interrupt() {*interrupted = false;}
 			
 			template<typename... T> auto receive(T&& ... t){
 				::mutils::connection& _this = *this;

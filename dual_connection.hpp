@@ -14,10 +14,8 @@ namespace mutils{
 	struct ControlChannel : public std::exception, public connection {
 		//this socket is ready for reading and contains the message
 		dual_connection& parent;
-		const char first_byte;
-		bool consumed_first_byte{false};
 
-		ControlChannel(dual_connection& parent, const char first_byte);
+		ControlChannel(dual_connection& parent);
 		
 		std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
 
@@ -36,8 +34,7 @@ namespace mutils{
 			std::unique_ptr<interruptible_connection> control;
 			std::atomic_bool control_exn_thrown{false};
 			ctpl::thread_pool check_control_exn{1};
-			std::function<char (int) > check_control_fun;
-			std::future<char> exn_first_byte;
+			std::function<void (int) > check_control_fun;
 			Internals(std::unique_ptr<interruptible_connection> data, std::unique_ptr<interruptible_connection> control);
 		};
 		std::unique_ptr<Internals> i;
@@ -54,6 +51,7 @@ namespace mutils{
 		std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const v) {
 			return i->data->raw_send(how_many,sizes,v);
 		}
+		~dual_connection();
 	};
 
 	template<typename ConnectionManager>

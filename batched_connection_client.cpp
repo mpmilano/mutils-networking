@@ -195,7 +195,7 @@ namespace mutils{
 			log_file << "processing new receive, expect total size " << expected_size << std::endl;
 			log_file.flush();
 #endif
-			while (!interrupted){
+			while (!*interrupted){
 #ifndef NDEBUG
 				log_file << "iterating new receive" << std::endl;
 #endif
@@ -222,7 +222,7 @@ namespace mutils{
 #endif
 					return expected_size;
 				}
-				else if (auto l = sock.socket_lock.lock_or_abort([&]{return interrupted || (my_queue.queue.size() > 0);})) {
+				else if (auto l = sock.socket_lock.lock_or_abort([&]{return *interrupted || (my_queue.queue.size() > 0);})) {
 					assert(l);
 					//it would be a bad bug if somehow we had a message ready
 #ifndef NDEBUG
@@ -268,7 +268,7 @@ namespace mutils{
 			}
 			//only way to get here?
 			//interrupted was true in condition
-			interrupted = false;
+			*interrupted = false;
 			throw ReadInterruptedException{};
 		}
 
