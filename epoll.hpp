@@ -3,6 +3,7 @@
 #include <vector>
 #include <unordered_map>
 #include <iostream>
+#include <sstream>
 
 //purpose: wrap epoll logic in a class for easier use.
 //the epoll logic contained herein is from https://banu.com/blog/2/how-to-use-epoll-a-complete-example-in-c/
@@ -53,7 +54,7 @@ struct EPoll{
 		epoll_removed_exception(std::exception_ptr ep, epoll_action ea)
 			:ep(ep),
 			 ea(std::move(ea)),
-			 msg([&]{
+			 msg([&]() -> std::string{
 					 std::stringstream ss;
 					 ss << "action threw exception: [[";
 					 try {
@@ -67,7 +68,8 @@ struct EPoll{
 						 ss << "dunno what this is";
 						 ep = std::current_exception();
 					 }
-					 ss << "]] item removed from epoll set and returned to caller"
+					 ss << "]] item removed from epoll set and returned to caller";
+					 return ss.str();
 				 }())
 			{}
 		
