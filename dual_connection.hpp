@@ -77,10 +77,23 @@ namespace mutils{
 			//the control channel (constructed first) never gets ticked
 			auto l = cm.spawn(2);
 			using subconn = std::decay_t<decltype(l.front())>;
-			return dual_connection{
-				std::unique_ptr<interruptible_connection>(new subconn(std::move(l.back()))),
-					std::unique_ptr<interruptible_connection>(new subconn(std::move(l.front())))
-					};
+			bool front_is_data{false};
+			bool back_is_data{false};
+			l.front().receive(front_is_data);
+			l.back().receive(back_is_data);
+			assert(front_is_data ? !back_is_data : back_is_data);
+			if (front_is_data){
+				return dual_connection{
+					std::unique_ptr<interruptible_connection>(new subconn(std::move(l.front()))),
+						std::unique_ptr<interruptible_connection>(new subconn(std::move(l.back())))
+						};
+			}
+			else {
+				return dual_connection{
+					std::unique_ptr<interruptible_connection>(new subconn(std::move(l.front()))),
+						std::unique_ptr<interruptible_connection>(new subconn(std::move(l.back())))
+						};
+			}
 		}
 	};
 
@@ -133,8 +146,10 @@ namespace mutils{
 		control_state(control_state_p& parent, ::mutils::connection& c)
 		:last_control_state(parent),c(c)
 			{
+				bool is_data{false};
 				std::cout << "control state constructed" << std::endl;
 				last_control_state = this;
+				c.send(is_data);
 			}
 
 		//this *must* be wait-free.  We're calling it in the receive thread!
@@ -154,9 +169,11 @@ namespace mutils{
 		
 		data_state(whendebug(std::ofstream &log_file,) new_dualstate_t f, control_state_p& parent, ::mutils::connection& c)
 			:last_control_state(parent),dw(f(whendebug(log_file,) c, sibling.c ) ){
+			bool is_data{true};
 			last_control_state = nullptr;
 			std::cout << "setting sibling" << std::endl;
 			sibling.sibling = this;
+			c.send(is_data);
 		}
 		
 		//this *must* be wait-free.  We're calling it in the receive thread!
