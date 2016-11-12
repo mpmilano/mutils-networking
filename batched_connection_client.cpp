@@ -124,6 +124,11 @@ namespace mutils{
 				log_file.flush();
 #endif
 				recv_size = sock.sock.drain(into.size() - offset,into.payload + offset);
+				if (recv_size == 0) {
+					/*next drain should throw an exception*/
+					recv_size = sock.sock.drain(into.size() - offset,into.payload + offset);
+					assert(false && "apparently we can drain an empty socket? shrug.");
+				}
 #ifndef NDEBUG
 				log_file << "network completed: received " << recv_size << " bytes (log file is " << hdr_size << " bytes)" << std::endl;
 				log_file.flush();
