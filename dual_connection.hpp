@@ -83,15 +83,31 @@ namespace mutils{
 			l.back().receive(back_is_data);
 			assert(front_is_data ? !back_is_data : back_is_data);
 			if (front_is_data){
+#ifndef NDEBUG
+				auto &flog_file = l.front().log_file;
+				flog_file << "this is the data connection" << std::endl;
+				flog_file.flush();
+				auto &blog_file = l.back().log_file;
+				blog_file << "this is the control connection" << std::endl;
+				blog_file.flush();
+#endif
 				return dual_connection{
 					std::unique_ptr<interruptible_connection>(new subconn(std::move(l.front()))),
 						std::unique_ptr<interruptible_connection>(new subconn(std::move(l.back())))
 						};
 			}
 			else {
+#ifndef NDEBUG
+				auto &flog_file = l.back().log_file;
+				flog_file << "this is the data connection" << std::endl;
+				flog_file.flush();
+				auto &blog_file = l.front().log_file;
+				blog_file << "this is the control connection" << std::endl;
+				blog_file.flush();
+#endif
 				return dual_connection{
-					std::unique_ptr<interruptible_connection>(new subconn(std::move(l.front()))),
-						std::unique_ptr<interruptible_connection>(new subconn(std::move(l.back())))
+					std::unique_ptr<interruptible_connection>(new subconn(std::move(l.back()))),
+						std::unique_ptr<interruptible_connection>(new subconn(std::move(l.front())))
 						};
 			}
 		}
