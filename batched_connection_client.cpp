@@ -123,9 +123,9 @@ namespace mutils{
 				log_file << "waiting on network" << std::endl;
 				log_file.flush();
 #endif
-                                recv_size = sock.sock.drain(into.size() - offset,into.payload + offset);
+				recv_size = sock.sock.drain(into.size() - offset,into.payload + offset);
 #ifndef NDEBUG
-				log_file << "network completed" << std::endl;
+				log_file << "network completed: received " << recv_size << " bytes (log file is " << hdr_size << " bytes)" << std::endl;
 				log_file.flush();
 #endif			
 			}

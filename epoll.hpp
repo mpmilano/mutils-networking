@@ -49,11 +49,30 @@ struct EPoll{
 	struct epoll_removed_exception : public std::exception{
 		const std::exception_ptr ep;
 		epoll_action ea;
+		const std::string msg;
 		epoll_removed_exception(std::exception_ptr ep, epoll_action ea)
-			:ep(ep),ea(std::move(ea)){}
+			:ep(ep),
+			 ea(std::move(ea)),
+			 msg([&]{
+					 std::stringstream ss;
+					 ss << "action threw exception: [[";
+					 try {
+						 std::rethrow_exception(ep);
+					 }
+					 catch (const std::exception &e){
+						 ss << e.what();
+						 ep = std::current_exception();
+					 }
+					 catch (...){
+						 ss << "dunno what this is";
+						 ep = std::current_exception();
+					 }
+					 ss << "]] item removed from epoll set and returned to caller"
+				 }())
+			{}
 		
 		const char* what() const noexcept {
-			return "action threw exception; item removed from epoll set and returned to caller";
+			return msg.c_str();
 		}
 	};
 	
