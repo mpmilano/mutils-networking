@@ -100,6 +100,7 @@ namespace mutils {
 			std::size_t handle_oversized_request(std::size_t how_many,
 												 std::size_t const * const sizes,
 												 void ** bufs,
+												 std::size_t expected_size,
 												 buf_ptr msg);
 		public:
 			std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
