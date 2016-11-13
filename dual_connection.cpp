@@ -73,8 +73,7 @@ namespace mutils{
 	
 	//this *must* be wait-free.  We're calling it in the receive thread!
 	void control_state::deliver_new_event(const void* v){
-            assert(sibling && "setup failure");
-		sibling->dw->deliver_new_control_event(v);
+		sibling.dw->deliver_new_control_event(v);
 	}
 	
 	void control_state::async_tick() {

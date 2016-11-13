@@ -43,8 +43,8 @@ namespace mutils{
 			:sock(s),id(_id),my_queue(
 				[&]() -> incoming_message_queue& {
 					if (s.incoming.size() <= id){
-						assert(false && "we should hold a lock here, but it seems to result in deadlock");
-						s.incoming.resize(id + 1);
+						whendebug(std::cout << "resizing: socket lock held: " << s.socket_lock.why_am_i_held << std::endl);
+						if (auto l = s.socket_lock.lock_or_abort(whendebug("resizing", ) [&]{return id < s.incoming.size();})) s.incoming.resize(id + 1);
 					}
 					s.incoming[id].reset(new incoming_message_queue());
 					return *s.incoming[id];
@@ -228,8 +228,10 @@ namespace mutils{
 #endif
 					return expected_size;
 				}
-				else if (auto l = sock.socket_lock.lock_or_abort([&]{return *interrupted || (my_queue.queue.size() > 0);})) {
+				else if (auto l = ( sock.socket_lock.lock_or_abort( whendebug("network processing" ,) [&]{return *interrupted || (my_queue.queue.size() > 0);}))) {
 					assert(l);
+					if (sock.unused_id > sock.incoming.size())
+						sock.incoming.resize(sock.unused_id*2);
 					//it would be a bad bug if somehow we had a message ready
 #ifndef NDEBUG
 					log_file << "lock acquired" << std::endl;

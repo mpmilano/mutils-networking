@@ -5,6 +5,7 @@
 #include "SimpleConcurrentMap.hpp"
 #include "ctpl_stl.h"
 #include "interruptible_connection.hpp"
+#include "epoll.hpp"
 
 namespace mutils{
 
@@ -77,39 +78,19 @@ namespace mutils{
 			//the control channel (constructed first) never gets ticked
 			auto l = cm.spawn(2);
 			using subconn = std::decay_t<decltype(l.front())>;
-			bool front_is_data{false};
-			bool back_is_data{false};
-			l.front().receive(front_is_data);
-			l.back().receive(back_is_data);
-			assert(front_is_data ? !back_is_data : back_is_data);
-			if (front_is_data){
-#ifndef NDEBUG
-				auto &flog_file = l.front().log_file;
-				flog_file << "this is the data connection" << std::endl;
-				flog_file.flush();
-				auto &blog_file = l.back().log_file;
-				blog_file << "this is the control connection" << std::endl;
-				blog_file.flush();
-#endif
-				return dual_connection{
-					std::unique_ptr<interruptible_connection>(new subconn(std::move(l.front()))),
-						std::unique_ptr<interruptible_connection>(new subconn(std::move(l.back())))
-						};
-			}
-			else {
-#ifndef NDEBUG
-				auto &flog_file = l.back().log_file;
-				flog_file << "this is the data connection" << std::endl;
-				flog_file.flush();
-				auto &blog_file = l.front().log_file;
-				blog_file << "this is the control connection" << std::endl;
-				blog_file.flush();
-#endif
-				return dual_connection{
-					std::unique_ptr<interruptible_connection>(new subconn(std::move(l.back()))),
-						std::unique_ptr<interruptible_connection>(new subconn(std::move(l.front())))
-						};
-			}
+			auto &data = l.front();
+			auto &control = l.back();
+
+			int data_id{-2};
+			int control_id{-2};
+			data.receive(data_id);
+			control.receive(control_id);
+			data.send(true,control_id);
+			control.send(false,data_id);
+			return dual_connection{
+				std::unique_ptr<interruptible_connection>(new subconn(std::move(l.front()))),
+					std::unique_ptr<interruptible_connection>(new subconn(std::move(l.back())))
+					};
 		}
 	};
 
@@ -140,7 +121,9 @@ namespace mutils{
 	//control, data, control, data
 	template<typename receiver>
 	struct dual_connection_receiver {
-		control_state* last_control_state{nullptr};
+		std::vector<rpc::ReceiverFun* > clearing_house;
+		std::mutex clearing_house_lock;
+		std::atomic_int used_ids{0};
 		receiver r;
 		bool &alive{r.alive};
 
@@ -154,19 +137,12 @@ namespace mutils{
 	struct data_state;
 
 	struct control_state : public rpc::ReceiverFun {
-		control_state_p& last_control_state;
-		data_state* sibling{nullptr};
+		data_state& sibling;
 		::mutils::connection& c;
 		eventfd block_forever;
 		
-		control_state(control_state_p& parent, ::mutils::connection& c)
-		:last_control_state(parent),c(c)
-			{
-				bool is_data{false};
-				whendebug(std::cout << "control state constructed" << std::endl;)
-				last_control_state = this;
-				c.send(is_data);
-			}
+		control_state(data_state& sibling, ::mutils::connection& c):sibling(sibling),c(c)
+			{}
 
 		//this *must* be wait-free.  We're calling it in the receive thread!
 		void deliver_new_event(const void* v);
@@ -179,18 +155,13 @@ namespace mutils{
 
 	struct data_state : public rpc::ReceiverFun{
 
-		control_state_p &last_control_state;
-		control_state& sibling{*last_control_state};
+		std::unique_ptr<control_state> sibling_tmp_owner;
+		control_state& sibling{*sibling_tmp_owner};
 		std::unique_ptr<dual_state_receiver> dw;
 		
-		data_state(whendebug(std::ofstream &log_file,) new_dualstate_t f, control_state_p& parent, ::mutils::connection& c)
-			:last_control_state(parent),dw(f(whendebug(log_file,) c, sibling.c ) ){
-			bool is_data{true};
-			last_control_state = nullptr;
-			whendebug(std::cout << "setting sibling" << std::endl;)
-			sibling.sibling = this;
-			c.send(is_data);
-		}
+		data_state(whendebug(std::ofstream &log_file,) new_dualstate_t f, ::mutils::connection& c)
+			:sibling_tmp_owner(new control_state(*this,c)),
+			 dw(f(whendebug(log_file,) c, sibling.c ) ){}
 		
 		//this *must* be wait-free.  We're calling it in the receive thread!
 		void deliver_new_event(const void* v){
@@ -209,17 +180,65 @@ namespace mutils{
 		}
 	};
 
+	struct super_state : public rpc::ReceiverFun{
+		EPoll ep;
+		eventfd &never{ep.template add<eventfd>(std::make_unique<eventfd>(), [](EPoll&, eventfd&){})};
+		rpc::ReceiverFun* child_state{nullptr};
+		//this *must* be wait-free.  We're calling it in the receive thread!
+
+		whendebug(std::ofstream &log_file);
+		new_dualstate_t f;
+		std::vector<ReceiverFun* >& clearing_house;
+		::mutils::connection& c;
+		const int my_id;
+		
+		super_state(whendebug(std::ofstream &log_file,) new_dualstate_t f, std::vector<ReceiverFun* >& clearing_house, std::mutex& clearing_house_lock, std::atomic_int &used_ids, ::mutils::connection& c)
+			:whendebug(log_file(log_file),)
+			f(f),
+			 clearing_house(clearing_house),
+			c(c), my_id(used_ids++)
+			{
+				if (clearing_house.size() <= (unsigned long) my_id) {
+					std::cerr << "this is not safe! need concurrent vector!" << std::endl;
+					std::unique_lock<std::mutex> l{clearing_house_lock};
+					clearing_house.resize(my_id*2 + 1);
+				}
+				c.send(my_id);
+			}
+		
+		void deliver_new_event(const void* v){
+			if (!child_state){
+				bool i_am_data = *((bool*) v);
+				int my_partner = *((int*) (((bool*)v) + 1));
+				auto epf = [](auto & ...){assert(false && "do not use this epoll dispatch");};
+				if (clearing_house[my_id]) child_state = clearing_house[my_id];
+				else {
+					assert(!clearing_house[my_partner]);
+					auto *data_st = &ep.template add<data_state>(std::make_unique<data_state>(whendebug(log_file,) f, c), epf);
+					auto *control_st = &ep.template add<control_state>(std::move(data_st->sibling_tmp_owner),epf);
+					if (i_am_data) child_state = data_st;
+					else child_state = control_st;
+				}
+			}
+			else child_state -> deliver_new_event(v);
+		}
+		//this *must* be wait-free.  We're calling it in the receive thread!
+		void async_tick(){
+			if (child_state) child_state->async_tick();
+		}
+		//must be able to select() on this int as an FD
+		//where a "read" ready indicates it's time to
+		//call async_tick
+		int underlying_fd(){
+			return ep.underlying_fd();
+		}
+	};
+
 	template<typename r>
 	dual_connection_receiver<r>::dual_connection_receiver(int port, new_dualstate_t f)
 		:r(port,[f,this](whendebug(std::ofstream &log_file,)
 					::mutils::connection &c) -> std::unique_ptr<rpc::ReceiverFun>{
-					if (!last_control_state){
-						return std::unique_ptr<rpc::ReceiverFun>
-						{new control_state{last_control_state,c}};
-					}
-					else return std::unique_ptr<rpc::ReceiverFun>
-						 {new data_state{whendebug(log_file,)f,last_control_state,c}};
+			   return std::unique_ptr<rpc::ReceiverFun>{new super_state(whendebug(log_file,) f, clearing_house, clearing_house_lock, used_ids, c)};
 				})
 			{}
-
 }
