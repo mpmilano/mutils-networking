@@ -163,7 +163,7 @@ namespace mutils{
 		:last_control_state(parent),c(c)
 			{
 				bool is_data{false};
-				std::cout << "control state constructed" << std::endl;
+				whendebug(std::cout << "control state constructed" << std::endl;)
 				last_control_state = this;
 				c.send(is_data);
 			}
@@ -187,7 +187,7 @@ namespace mutils{
 			:last_control_state(parent),dw(f(whendebug(log_file,) c, sibling.c ) ){
 			bool is_data{true};
 			last_control_state = nullptr;
-			std::cout << "setting sibling" << std::endl;
+			whendebug(std::cout << "setting sibling" << std::endl;)
 			sibling.sibling = this;
 			c.send(is_data);
 		}
