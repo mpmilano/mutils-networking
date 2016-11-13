@@ -147,7 +147,7 @@ namespace mutils{
 			return returned_l;
 		};
 
-		std::size_t connection::handle_oversized_request(std::size_t how_many, std::size_t const * const sizes, void ** bufs, std::size_t expected_size, buf_ptr msg){
+		std::size_t connection::handle_oversized_request(std::size_t how_many, std::size_t const * const sizes, void ** bufs, std::size_t whendebug(expected_size), buf_ptr msg){
 			whendebug(log_file << "oversized request detected!" << std::endl; log_file.flush());
 			whendebug(log_file << "we expected: " << expected_size << " but got: " << msg.size()<< std::endl; log_file.flush());
 			assert(false && "this is untested and known to be non-atomic; if a connection is interrupted while this function is running, that interrupt will result in partially-full buffers!");
@@ -304,7 +304,7 @@ namespace mutils{
 		}
 
 		std::list<connection> connections::spawn(std::size_t N){
-			std::cout << "spawning " << N << " connections" << std::endl;
+			whendebug(std::cout << "spawning " << N << " connections" << std::endl);
 			auto &_i = i->_this;
 			auto my_id = ++_i.current_connection_id;
 			auto &my_socket = _i.bundles.at(my_id% _i.modulus);
