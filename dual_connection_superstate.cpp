@@ -9,7 +9,7 @@ namespace mutils{
 			c(c), my_id(used_ids++)
 			{
 				if (clearing_house.size() <= (unsigned long) my_id) {
-					clearing_house.resize(my_id*2 + 1);
+					clearing_house.extend(my_id*2 + 1);
 				}
 				c.send(my_id);
 			}
