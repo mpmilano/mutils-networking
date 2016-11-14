@@ -13,9 +13,6 @@ namespace mutils{
 
 	Socket::~Socket(){
 		if (is_valid && sockID > 0) {
-#ifndef NDEBUG
-			std::cerr << "closing socket" << std::endl;
-#endif
 			close(sockID);
 		}
 	}

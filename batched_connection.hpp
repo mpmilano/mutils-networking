@@ -5,6 +5,7 @@
 #include <sstream>
 #include "abortable_lock.hpp"
 #include <atomic>
+#include "SimpleConcurrentVector.hpp"
 #include "ServerSocket.hpp"
 #include "buffer_generator.hpp"
 #include "epoll.hpp"
@@ -41,7 +42,7 @@ namespace mutils {
 			Socket sock;
 			const id_type socket_id = gensym();
 			std::atomic<id_type> unused_id{0};
-			std::vector<std::unique_ptr<incoming_message_queue> > incoming{connection_factor*2};
+			SimpleConcurrentVector<std::unique_ptr<incoming_message_queue> > incoming{connection_factor*2};
 			abortable_locked_guardian socket_lock;
 			
 			//represents a partial message whose
