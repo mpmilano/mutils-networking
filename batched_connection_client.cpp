@@ -128,7 +128,7 @@ namespace mutils{
 				if (recv_size == 0) {
 					/*next drain should throw an exception*/
 					recv_size = sock.sock.drain(into.size() - offset,into.payload + offset);
-					assert(false && "apparently we can drain an empty socket? shrug.");
+					assert(recv_size == 0);
 					throw ProtocolException{"Error: connection closed"};
 				}
 #ifndef NDEBUG

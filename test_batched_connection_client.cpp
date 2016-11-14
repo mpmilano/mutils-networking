@@ -52,10 +52,13 @@ int main(int argc, char* argv[]){
 						//auto outlier10_average = outlier10_count / (total_events + 1.0);
 						//auto outlier100_average = outlier100_count / (total_events + 1.0);
 						auto start = high_resolution_clock::now();
+						static_assert(sizeof(short)*2 == sizeof(int),"");
 						int receipt{-1};
+						short *receipt_arr = (short*)&receipt;
 						c->send(my_msg);
 						//std::cout << "sending initial message" << std::endl;
-						c->receive(receipt);
+						c->receive(receipt_arr[0]);
+						c->receive(receipt_arr[1]);
 						//std::cout << "received initial message reply" << std::endl;
 
 						auto end = high_resolution_clock::now();

@@ -3,8 +3,10 @@
 namespace mutils{
 
 
-		ControlChannel::ControlChannel(dual_connection& parent)
-			:parent(parent){}
+		ControlChannel::ControlChannel(dual_connection& parent, connection& data_channel)
+			:parent(parent)
+			,data_channel(data_channel)
+		{}
 		
 		std::size_t ControlChannel::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
 			return parent.i->control->raw_receive(how_many,sizes,bufs);
@@ -59,7 +61,7 @@ namespace mutils{
 			if (i->control_exn_thrown){
 				//the destructor of this exception will reset the control channel exn flag,
 				//and will also re-start the thread that checks for whether the channel is throwing an exception.
-				throw ControlChannel{*this};
+				throw ControlChannel{*this,*i->data};
 			}
 			else try {
 					return i->data->raw_receive(how_many,sizes,bufs);
@@ -67,7 +69,7 @@ namespace mutils{
 				catch (const ReadInterruptedException&){
 					//this means we must have gotten a response on the control channel.
 					assert(i->control_exn_thrown);
-					throw ControlChannel{*this};
+					throw ControlChannel{*this,*i->data};
 				}
 		}
 	

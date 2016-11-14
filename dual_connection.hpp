@@ -16,8 +16,9 @@ namespace mutils{
 	struct ControlChannel : public std::exception, public connection {
 		//this socket is ready for reading and contains the message
 		dual_connection& parent;
+		connection& data_channel;
 
-		ControlChannel(dual_connection& parent);
+		ControlChannel(dual_connection& parent, connection& data_channel);
 		
 		std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
 

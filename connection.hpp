@@ -101,10 +101,14 @@ struct connection{
 		return raw_send(sizeof...(T),sizes,bufs);
 	}
 
-	auto receive(std::size_t size, void *data){
+	auto receive_data(std::size_t size, void *data){
 		std::size_t sizes[] = {size};
 		void* bufs[] = {data};
 		return raw_receive(1,sizes,bufs);
+	}
+
+	auto receive(std::size_t size, void *data){
+		return receive_data(size,data);
 	}
 
 	auto send (std::size_t size, void const * const data){
