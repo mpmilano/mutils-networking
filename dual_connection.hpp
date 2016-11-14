@@ -6,6 +6,7 @@
 #include "ctpl_stl.h"
 #include "interruptible_connection.hpp"
 #include "epoll.hpp"
+#include "SimpleConcurrentVector.hpp"
 
 namespace mutils{
 
@@ -116,13 +117,13 @@ namespace mutils{
 
 
 	struct control_state;
+	struct super_state;
 	
 	//assuming synhronous initialization in the order
 	//control, data, control, data
 	template<typename receiver>
 	struct dual_connection_receiver {
-		std::vector<rpc::ReceiverFun* > clearing_house;
-		std::mutex clearing_house_lock;
+		SimpleConcurrentVector<super_state* > clearing_house;
 		std::atomic_int used_ids{0};
 		receiver r;
 		bool &alive{r.alive};
@@ -159,9 +160,10 @@ namespace mutils{
 		control_state& sibling{*sibling_tmp_owner};
 		std::unique_ptr<dual_state_receiver> dw;
 		
-		data_state(whendebug(std::ofstream &log_file,) new_dualstate_t f, ::mutils::connection& c)
-			:sibling_tmp_owner(new control_state(*this,c)),
-			 dw(f(whendebug(log_file,) c, sibling.c ) ){}
+		data_state(whendebug(std::ofstream &log_file,) new_dualstate_t f,
+				   ::mutils::connection& data_conn, ::mutils::connection& control_conn)
+			:sibling_tmp_owner(new control_state(*this,control_conn)),
+			 dw(f(whendebug(log_file,) data_conn, control_conn ) ){}
 		
 		//this *must* be wait-free.  We're calling it in the receive thread!
 		void deliver_new_event(const void* v){
@@ -188,40 +190,20 @@ namespace mutils{
 
 		whendebug(std::ofstream &log_file);
 		new_dualstate_t f;
-		std::vector<ReceiverFun* >& clearing_house;
+		SimpleConcurrentVector<super_state* >& clearing_house;
 		::mutils::connection& c;
 		const int my_id;
+		int my_partner{-1};
+		bool i_am_data{false};
 		
-		super_state(whendebug(std::ofstream &log_file,) new_dualstate_t f, std::vector<ReceiverFun* >& clearing_house, std::mutex& clearing_house_lock, std::atomic_int &used_ids, ::mutils::connection& c)
-			:whendebug(log_file(log_file),)
-			f(f),
-			 clearing_house(clearing_house),
-			c(c), my_id(used_ids++)
-			{
-				if (clearing_house.size() <= (unsigned long) my_id) {
-					std::cerr << "this is not safe! need concurrent vector!" << std::endl;
-					std::unique_lock<std::mutex> l{clearing_house_lock};
-					clearing_house.resize(my_id*2 + 1);
-				}
-				c.send(my_id);
-			}
+		super_state(whendebug(std::ofstream &log_file,) new_dualstate_t f, SimpleConcurrentVector<super_state* >& clearing_house, std::atomic_int &used_ids, ::mutils::connection& c);
 		
-		void deliver_new_event(const void* v){
-			if (!child_state){
-				bool i_am_data = *((bool*) v);
-				int my_partner = *((int*) (((bool*)v) + 1));
-				auto epf = [](auto & ...){assert(false && "do not use this epoll dispatch");};
-				if (clearing_house[my_id]) child_state = clearing_house[my_id];
-				else {
-					assert(!clearing_house[my_partner]);
-					auto *data_st = &ep.template add<data_state>(std::make_unique<data_state>(whendebug(log_file,) f, c), epf);
-					auto *control_st = &ep.template add<control_state>(std::move(data_st->sibling_tmp_owner),epf);
-					if (i_am_data) child_state = data_st;
-					else child_state = control_st;
-				}
-			}
-			else child_state -> deliver_new_event(v);
-		}
+
+		/*protocol sequence:
+		  Person who goes first: put yourself in clearing_house, done.
+		  person who goes second: initialize everything for you + your partner.
+		 */
+		void deliver_new_event(const void* v);
 		//this *must* be wait-free.  We're calling it in the receive thread!
 		void async_tick(){
 			if (child_state) child_state->async_tick();
@@ -238,7 +220,7 @@ namespace mutils{
 	dual_connection_receiver<r>::dual_connection_receiver(int port, new_dualstate_t f)
 		:r(port,[f,this](whendebug(std::ofstream &log_file,)
 					::mutils::connection &c) -> std::unique_ptr<rpc::ReceiverFun>{
-			   return std::unique_ptr<rpc::ReceiverFun>{new super_state(whendebug(log_file,) f, clearing_house, clearing_house_lock, used_ids, c)};
+			   return std::unique_ptr<rpc::ReceiverFun>{new super_state(whendebug(log_file,) f, clearing_house, used_ids, c)};
 				})
 			{}
 }

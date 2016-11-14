@@ -17,7 +17,9 @@ int main(){
 				eventfd notice;
 				//this *must* be wait-free.  We're calling it in the receive thread!
 				void deliver_new_data_event(const void*) {
+					assert(&data != &control);
 					int e = 42;
+					data.send(e);
 					control.send(e);
 				}
 				

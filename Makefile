@@ -1,6 +1,6 @@
 CPPFLAGS= -I$(PWD) -I$(PWD)/../ -I$(PWD)/../mtl -I$(PWD)/..//myria-utils -I$(PWD)/../mutils-networking -I$(PWD)/../mutils -I$(PWD)/../mutils-containers -I$(PWD)/../mutils-serialization -I$(PWD)/../mutils-tasks -I$(PWD)/../testing -I$(PWD)/pgsql -I$(PWD)/../tracker -g -stdlib=libc++ --std=c++1z -Wall -DMAX_THREADS=$(MAX_THREADS) -ferror-limit=1 -Wall -Werror -Wextra
 LDFLAGS= -stdlib=libc++ --std=c++1z -lpq -lm -pthread
-object_files=ServerSocket.o SerializationSupport.o utils.o Socket.o batched_connection_server.o batched_connection_client.o batched_connection_common.o  eventfd.o epoll.o dual_connection.o
+object_files=ServerSocket.o SerializationSupport.o utils.o Socket.o batched_connection_server.o batched_connection_client.o batched_connection_common.o  eventfd.o epoll.o dual_connection.o dual_connection_superstate.o 
 
 dc_test: _dc_test_client _dc_test_server
 	echo done
@@ -42,6 +42,9 @@ GlobalPool.o:
 
 dual_connection.o:
 	clang++ -c -O3  dual_connection.cpp $(CPPFLAGS)
+
+dual_connection_superstate.o:
+	clang++ -c -O3  dual_connection_superstate.cpp $(CPPFLAGS)
 
 clean:
 	rm *.o
