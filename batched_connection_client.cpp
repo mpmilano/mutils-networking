@@ -105,6 +105,7 @@ namespace mutils{
 			struct ResourceReturn{
 				locked_socket_t l;
 				buf_ptr from;
+				std::exception_ptr payload_exn;
 			};
 		}
 
@@ -113,39 +114,47 @@ namespace mutils{
 									   size_type offset)
 		{
 			auto into = from.grow_to_fit(expected_size + offset);
-#ifndef NDEBUG
-			auto into_size = into.size();
-#endif
-			assert(into_size > offset);
-			size_type recv_size{0};
 			try {
 #ifndef NDEBUG
-				log_file << "waiting on network" << std::endl;
-				log_file.flush();
+				auto into_size = into.size();
 #endif
-				recv_size = sock.sock.drain(into.size() - offset,into.payload + offset);
-				if (recv_size == 0) {
-					/*next drain should throw an exception*/
+				assert(into_size > offset);
+				size_type recv_size{0};
+				try {
+#ifndef NDEBUG
+					log_file << "waiting on network" << std::endl;
+					log_file.flush();
+#endif
 					recv_size = sock.sock.drain(into.size() - offset,into.payload + offset);
-					assert(recv_size == 0);
-					throw ProtocolException{"Error: connection closed"};
-				}
+					if (recv_size == 0) {
+						/*next drain should throw an exception*/
+						recv_size = sock.sock.drain(into.size() - offset,into.payload + offset);
+						assert(recv_size == 0);
+						throw ResourceReturn{std::move(l), std::move(into),std::make_exception_ptr(ProtocolException{"Error: connection closed"})};
+					}
 #ifndef NDEBUG
-				log_file << "network completed: received " << recv_size << " bytes (log file is " << hdr_size << " bytes)" << std::endl;
-				log_file.flush();
+					log_file << "network completed: received " << recv_size << " bytes (log file is " << hdr_size << " bytes)" << std::endl;
+					log_file.flush();
 #endif			
-			}
-			catch (const Timeout&){
+				}
+				catch (const Timeout&){
 #ifndef NDEBUG
-				log_file << "network timeout; checking queue again" << std::endl;
-				log_file.flush();
+					log_file << "network timeout; checking queue again" << std::endl;
+					log_file.flush();
 #endif
-				throw ResourceReturn{std::move(l), std::move(into)};
+					throw ResourceReturn{std::move(l), std::move(into),nullptr};
+				}
+				assert(into_size >= recv_size);
+				auto returned_l = process_data(std::move(l),std::move(into),recv_size + offset);
+				assert(sock.spare.payload || sock.orphans);
+				return returned_l;
 			}
-			assert(into_size >= recv_size);
-			auto returned_l = process_data(std::move(l),std::move(into),recv_size + offset);
-			assert(sock.spare.payload || sock.orphans);
-			return returned_l;
+			catch(const ResourceReturn& ){
+				std::rethrow_exception(std::current_exception());
+			}
+			catch(...){
+				throw ResourceReturn{std::move(l), std::move(into),std::current_exception()};
+			}
 		};
 
 		std::size_t connection::handle_oversized_request(std::size_t how_many, std::size_t const * const sizes, void ** bufs, std::size_t whendebug(expected_size), buf_ptr msg){
@@ -255,6 +264,7 @@ namespace mutils{
 							orphan->buf = std::move(rr.from);
 							sock.orphans = std::move(orphan);
 							assert(sock.spare.payload || sock.orphans);
+							if (rr.payload_exn) std::rethrow_exception(rr.payload_exn);
 						}
 					}
 					else {
@@ -269,6 +279,7 @@ namespace mutils{
 							//we still have the lock; it's in rr
 							sock.spare = std::move(rr.from);
 							assert(sock.spare.payload || sock.orphans);
+							if (rr.payload_exn) std::rethrow_exception(rr.payload_exn);
 						}
 					}
 				}
