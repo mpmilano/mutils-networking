@@ -20,6 +20,13 @@ namespace mutils{
 		const char* what() const noexcept{
 			return why.c_str();
 		}
+
+		virtual ~ProtocolException(){}
+	};
+
+	struct BrokenSocketException : public ProtocolException {
+		BrokenSocketException(std::string why):ProtocolException(why){}
+		virtual ~BrokenSocketException(){}
 	};
 
 	struct Timeout : public std::exception{

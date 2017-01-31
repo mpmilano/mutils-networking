@@ -134,7 +134,7 @@ namespace mutils{
 			err << "connection broken";
 			is_valid = false;
 			whendebug(why_not_valid = "connection broken");
-			throw ProtocolException(err.str());
+			throw BrokenSocketException(err.str());
 		}
 		else if (n < (int) total_size){
 			throw ProtocolException("MSG_WAITALL is supposed to do something here, right?");
@@ -187,7 +187,7 @@ namespace mutils{
 				}
 			}
 		}
-		else throw ProtocolException("attempt to send on broken connection!");
+		else throw BrokenSocketException("attempt to send on broken connection!");
 		return total_size;
 	}
 

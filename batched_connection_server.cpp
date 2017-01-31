@@ -115,19 +115,25 @@ namespace mutils{
 			try {
 				receiver_state_set.wait();
 			}
-			catch(typename EPoll::epoll_removed_exception& whendebug(epe)){
-				//somebody threw an exception.  Assume it was the socket;
-				//don't try to fix anything just let it get cleaned up.
-#ifndef NDEBUG
+			catch(typename EPoll::epoll_removed_exception& epe){
 				try {
 					std::rethrow_exception(epe.ep);
 				}
+				catch (BrokenSocketException& bs){
+					//looks like remote closed the connection.  nothing to see here,
+					//let everything get cleaned up.
+				}
+				//if we exited for a different exception, then that's important; let's fail
+				//and clean up the bug.
+#ifndef NDEBUG
 				catch (std::exception &e){
 					std::cerr << epe.what() << std::endl;
 					std::cerr << e.what() << std::endl;
+					throw e;
 				}
 				catch(...){
 					std::cerr << "epoll threw a non-std exn!" << std::endl;
+					std::rethrow_exception(std::current_exception());
 				}
 #endif
 			}
