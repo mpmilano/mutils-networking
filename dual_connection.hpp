@@ -26,7 +26,7 @@ namespace mutils{
 		
 		bool valid () const ;
 
-		whendebug(std::ofstream& get_log_file();)
+		whendebug(std::ostream& get_log_file();)
 		
 		const char* what() const noexcept;
 		
@@ -49,7 +49,7 @@ namespace mutils{
 		dual_connection(dual_connection&& o);
 
 #ifndef NDEBUG
-		std::ofstream& get_log_file(){
+		std::ostream& get_log_file(){
 			return i->data->get_log_file();
 		}
 #endif
@@ -114,7 +114,7 @@ namespace mutils{
 	};
 
 	using dualstate_action_t = std::unique_ptr<dual_state_receiver>;
-	using new_dualstate_t = std::function<dualstate_action_t (whendebug(std::ofstream&,) connection& data, connection& control)>;
+	using new_dualstate_t = std::function<dualstate_action_t (whendebug(std::ostream&,) connection& data, connection& control)>;
 
 
 	struct control_state;
@@ -161,7 +161,7 @@ namespace mutils{
 		control_state& sibling{*sibling_tmp_owner};
 		std::unique_ptr<dual_state_receiver> dw;
 		
-		data_state(whendebug(std::ofstream &log_file,) new_dualstate_t f,
+		data_state(whendebug(std::ostream &log_file,) new_dualstate_t f,
 				   ::mutils::connection& data_conn, ::mutils::connection& control_conn)
 			:sibling_tmp_owner(new control_state(*this,control_conn)),
 			 dw(f(whendebug(log_file,) data_conn, control_conn ) ){}
@@ -189,7 +189,7 @@ namespace mutils{
 		rpc::ReceiverFun* child_state{nullptr};
 		//this *must* be wait-free.  We're calling it in the receive thread!
 
-		whendebug(std::ofstream &log_file);
+		whendebug(std::ostream &log_file);
 		new_dualstate_t f;
 		SimpleConcurrentVector<super_state* >& clearing_house;
 		::mutils::connection& c;
@@ -197,7 +197,7 @@ namespace mutils{
 		int my_partner{-1};
 		bool i_am_data{false};
 		
-		super_state(whendebug(std::ofstream &log_file,) new_dualstate_t f, SimpleConcurrentVector<super_state* >& clearing_house, std::atomic_int &used_ids, ::mutils::connection& c);
+		super_state(whendebug(std::ostream &log_file,) new_dualstate_t f, SimpleConcurrentVector<super_state* >& clearing_house, std::atomic_int &used_ids, ::mutils::connection& c);
 		
 
 		/*protocol sequence:
@@ -219,7 +219,7 @@ namespace mutils{
 
 	template<typename r>
 	dual_connection_receiver<r>::dual_connection_receiver(int port, new_dualstate_t f)
-		:r(port,[f,this](whendebug(std::ofstream &log_file,)
+		:r(port,[f,this](whendebug(std::ostream &log_file,)
 					::mutils::connection &c) -> std::unique_ptr<rpc::ReceiverFun>{
 			   return std::unique_ptr<rpc::ReceiverFun>{new super_state(whendebug(log_file,) f, clearing_house, used_ids, c)};
 				})

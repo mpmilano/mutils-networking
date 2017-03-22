@@ -19,7 +19,7 @@ namespace mutils{
 		bool ControlChannel::valid () const {return parent.i->control->valid();}
 
 #ifndef NDEBUG
-	std::ofstream& ControlChannel::get_log_file(){
+	std::ostream& ControlChannel::get_log_file(){
 		return parent.i->control->get_log_file();
 	}
 #endif

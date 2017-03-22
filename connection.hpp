@@ -13,7 +13,7 @@ struct connection{
 	virtual std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const) = 0;
 
 #ifndef NDEBUG
-	virtual std::ofstream& get_log_file() = 0;
+	virtual std::ostream& get_log_file() = 0;
 #endif
 	template<typename... T>
 	void receive(T&... t){

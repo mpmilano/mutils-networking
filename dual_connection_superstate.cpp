@@ -2,7 +2,7 @@
 
 namespace mutils{
 
-	super_state::super_state(whendebug(std::ofstream &log_file,) new_dualstate_t f, SimpleConcurrentVector<super_state* >& clearing_house, std::atomic_int &used_ids, ::mutils::connection& c)
+	super_state::super_state(whendebug(std::ostream &log_file,) new_dualstate_t f, SimpleConcurrentVector<super_state* >& clearing_house, std::atomic_int &used_ids, ::mutils::connection& c)
 			:whendebug(log_file(log_file),)
 			f(f),
 			clearing_house(clearing_house),
