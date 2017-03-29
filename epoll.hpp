@@ -3,7 +3,10 @@
 #include <vector>
 #include <unordered_map>
 #include <iostream>
+#include <functional>
+#include <memory>
 #include <sstream>
+#include <cstring>
 
 //purpose: wrap epoll logic in a class for easier use.
 //the epoll logic contained herein is from https://banu.com/blog/2/how-to-use-epoll-a-complete-example-in-c/

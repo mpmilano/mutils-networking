@@ -1,14 +1,9 @@
-CPPFLAGS= -I$(PWD) -I$(PWD)/../ -I$(PWD)/../mtl -I$(PWD)/..//myria-utils -I$(PWD)/../mutils-networking -I$(PWD)/../mutils -I$(PWD)/../mutils-containers -I$(PWD)/../mutils-serialization -I$(PWD)/../mutils-tasks -I$(PWD)/../testing -I$(PWD)/pgsql -I$(PWD)/../tracker -g -stdlib=libc++ --std=c++1z -Wall -DMAX_THREADS=$(MAX_THREADS) -ferror-limit=1 -Wall -Werror -Wextra
-LDFLAGS= -stdlib=libc++ --std=c++1z -lpq -lm -pthread
+CPPFLAGS= -I$(PWD) -I$(PWD)/../ -I$(PWD)/../mtl -I$(PWD)/..//myria-utils -I$(PWD)/../mutils-networking -I$(PWD)/../mutils -I$(PWD)/../mutils-containers -I$(PWD)/../mutils-serialization -I$(PWD)/../mutils-tasks -I$(PWD)/../testing -I$(PWD)/pgsql -I$(PWD)/../tracker -g  --std=c++1z -Wall -DMAX_THREADS=$(MAX_THREADS)  -Wall -Werror -Wextra -DNDEBUG
+LDFLAGS=  --std=c++1z -lpq -lm -pthread
 object_files=ServerSocket.o SerializationSupport.o utils.o Socket.o batched_connection_server.o batched_connection_client.o batched_connection_common.o  eventfd.o epoll.o dual_connection.o dual_connection_superstate.o 
 
-dc_test: _dc_test_client _dc_test_server
-	echo done
-
-_dc_test_client: $(object_files)
-	clang++ test_dual_connection.cpp $(object_files) $(CPPFLAGS) $(LDFLAGS) -o dc_test_client
-_dc_test_server: $(object_files)
-	clang++ test_dual_connection_server.cpp $(object_files) $(CPPFLAGS) $(LDFLAGS) -o dc_test_server
+dc_test: $(object_files)
+	clang++ -O3 test_dual_connection.cpp $(object_files) $(CPPFLAGS) $(LDFLAGS) -o dc_test
 
 batched_connection_common.o:
 	clang++ -c -O3 ../*/batched_connection_common.cpp $(CPPFLAGS)

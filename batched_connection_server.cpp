@@ -1,5 +1,4 @@
 #include "Socket.hpp"
-#include "resource_pool.hpp"
 #include "batched_connection.hpp"
 #include "batched_connection_common.hpp"
 #include "ctpl_stl.h"

@@ -3,9 +3,10 @@
 namespace mutils{
 
 
-		ControlChannel::ControlChannel(dual_connection& parent, connection& data_channel)
+	ControlChannel::ControlChannel(dual_connection& parent, connection& data_channel, std::unique_lock<std::mutex> control_active)
 			:parent(parent)
-			,data_channel(data_channel)
+			,data_channel(data_channel),
+			 control_active(std::move(control_active))
 		{}
 		
 		std::size_t ControlChannel::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
@@ -30,13 +31,15 @@ namespace mutils{
 		
 		ControlChannel::~ControlChannel(){
 			parent.i->control_exn_thrown = false;
-			assert(parent.i->check_control_exn.n_idle() == 1);
 			parent.i->check_control_exn.push(parent.i->check_control_fun);
 			parent.i->data->clear_interrupt();
 		}
 
 	dual_connection::~dual_connection(){
-		i->control->interrupt();
+		if (i){
+			assert(i->control);
+			i->control->interrupt();
+		}
 	}
 
 
@@ -45,6 +48,7 @@ namespace mutils{
 			 control(std::move(control)),
 			 check_control_fun([this](int) -> void {
 					 this->control->raw_receive(0,nullptr,nullptr);
+					 control_lock l{this->control_channel_active};
 					 this->control_exn_thrown = true;
 					 this->data->interrupt();
 				 })
@@ -58,18 +62,24 @@ namespace mutils{
 		
 		std::size_t dual_connection::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
 			using namespace std::chrono;
-			if (i->control_exn_thrown){
+			bool exn_thrown{false};
+			{
+				control_lock l{i->control_channel_active};
+				exn_thrown = i->control_exn_thrown;
+			}
+			if (exn_thrown){
 				//the destructor of this exception will reset the control channel exn flag,
 				//and will also re-start the thread that checks for whether the channel is throwing an exception.
-				throw ControlChannel{*this,*i->data};
+				throw ControlChannel{*this,*i->data,control_lock{i->control_channel_active}};
 			}
 			else try {
 					return i->data->raw_receive(how_many,sizes,bufs);
 				}
 				catch (const ReadInterruptedException&){
 					//this means we must have gotten a response on the control channel.
+					control_lock l{i->control_channel_active};
 					assert(i->control_exn_thrown);
-					throw ControlChannel{*this,*i->data};
+					throw ControlChannel{*this,*i->data, std::move(l)};
 				}
 		}
 	

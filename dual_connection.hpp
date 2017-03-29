@@ -17,8 +17,14 @@ namespace mutils{
 		//this socket is ready for reading and contains the message
 		dual_connection& parent;
 		connection& data_channel;
+		std::unique_lock<std::mutex> control_active;
 
-		ControlChannel(dual_connection& parent, connection& data_channel);
+		ControlChannel(dual_connection& parent, connection& data_channel,
+									 std::unique_lock<std::mutex> control_active);
+
+		ControlChannel(ControlChannel&&) = default;
+
+		ControlChannel(const ControlChannel&) = delete;
 		
 		std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
 
@@ -37,11 +43,13 @@ namespace mutils{
 		struct Internals{
 			std::unique_ptr<interruptible_connection> data;
 			std::unique_ptr<interruptible_connection> control;
+			std::mutex control_channel_active;
 			std::atomic_bool control_exn_thrown{false};
 			ctpl::thread_pool check_control_exn{1};
 			std::function<void (int) > check_control_fun;
 			Internals(std::unique_ptr<interruptible_connection> data, std::unique_ptr<interruptible_connection> control);
 		};
+		using control_lock = std::unique_lock<std::mutex>;
 		std::unique_ptr<Internals> i;
 			
 		dual_connection(std::unique_ptr<interruptible_connection> data, std::unique_ptr<interruptible_connection> control);
@@ -146,6 +154,8 @@ namespace mutils{
 		control_state(data_state& sibling, ::mutils::connection& c):sibling(sibling),c(c)
 			{}
 
+		control_state(const control_state&) = delete;
+		
 		//this *must* be wait-free.  We're calling it in the receive thread!
 		void deliver_new_event(const void* v);
 		
@@ -165,6 +175,8 @@ namespace mutils{
 				   ::mutils::connection& data_conn, ::mutils::connection& control_conn)
 			:sibling_tmp_owner(new control_state(*this,control_conn)),
 			 dw(f(whendebug(log_file,) data_conn, control_conn ) ){}
+
+		data_state(const data_state&) = delete;
 		
 		//this *must* be wait-free.  We're calling it in the receive thread!
 		void deliver_new_event(const void* v){
