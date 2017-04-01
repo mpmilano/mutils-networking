@@ -118,4 +118,29 @@ struct connection{
 	}
 	
 };
+
+	//useful utilities for wrapping connections
+
+#define MUTILS_CONNECTION_PREPEND_EXTRA_BODY												\
+	static_assert(std::is_pod<T>::value, "Error: POD only for now" ); \
+	using namespace std;																							\
+	auto new_how_many = old_how_many+1;																\
+	std::size_t new_sizes[new_how_many];															\
+	memcpy(new_sizes+1, old_sizes,old_how_many);											\
+	new_sizes[0] = sizeof(T);																					\
+	memcpy(new_bufs+1, old_bufs,old_how_many);												\
+	new_bufs[0] = &extra
+	
+	template<typename conn, typename T> std::size_t receive_prepend_extra(conn& c, std::size_t old_how_many, std::size_t const * const old_sizes, void ** old_bufs, T& extra){
+		void* new_bufs[old_how_many+1];
+		MUTILS_CONNECTION_PREPEND_EXTRA_BODY;
+		return c.raw_receive(new_how_many,new_sizes, new_bufs) - sizeof(T);
+	}
+	
+	template<typename conn, typename T> std::size_t send_prepend_extra(conn& c, std::size_t old_how_many, std::size_t const * const old_sizes, void const * const * const old_bufs, const T& extra){
+		const void* new_bufs[old_how_many+1];
+		MUTILS_CONNECTION_PREPEND_EXTRA_BODY;
+		return c.raw_send(new_how_many,new_sizes, new_bufs) - sizeof(T);
+	}
+	
 }

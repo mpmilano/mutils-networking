@@ -64,7 +64,7 @@ namespace mutils{
 					log_file << "received " << size_rcvd << "bytes" << std::endl;
 					log_file.flush();
 #endif
-					p.action->deliver_new_event(recv_buf);
+					p.action->deliver_new_event(size,recv_buf);
 				}
 			}
 			catch (const Timeout&){

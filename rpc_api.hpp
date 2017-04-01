@@ -1,18 +1,13 @@
 #pragma once
 #include "connection.hpp"
+#include "AsyncObject.hpp"
 
 namespace mutils {
 	namespace rpc{
-		struct ReceiverFun {
+		struct ReceiverFun : public AsyncObject{
 			//this *must* be wait-free.  We're calling it in the receive thread!
-			virtual void deliver_new_event(const void*) = 0;
-			//this *must* be wait-free.  We're calling it in the receive thread!
-			virtual void async_tick() = 0;
-			//must be able to select() on this int as an FD
-			//where a "read" ready indicates it's time to
-			//call async_tick
-			virtual int underlying_fd() = 0;
-			virtual ~ReceiverFun(){}
+			virtual void deliver_new_event(std::size_t size, const void*) = 0;
+			virtual ~ReceiverFun() = default;
 		};
 		
 		using action_t = std::unique_ptr<ReceiverFun>;

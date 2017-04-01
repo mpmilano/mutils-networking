@@ -34,7 +34,7 @@ int main(int argc, char* argv[]){
 					ReceiverFun(connection& c, std::set<connection*> &used_connections)
 						:c(c),used_connections(used_connections){}
 #endif
-					void deliver_new_event(const void* inbnd) {
+					void deliver_new_event(std::size_t, const void* inbnd) {
 #ifndef NDEBUG
 						bool success = assert_single_threaded.try_lock();
 						assert(success);
