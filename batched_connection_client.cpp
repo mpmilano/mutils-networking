@@ -70,7 +70,7 @@ namespace mutils{
 			}
 			else {
 				const id_type &id = ((id_type*)payload->payload)[0];
-				const size_type &size = ((size_type*)payload->payload)[1];
+				const size_type &size = *((size_type*)(payload->payload + sizeof(id_type)));
 				assert(size <= max_vector_size);
 				if (payload_size < size + hdr_size) {
 					assert(!sock.orphans);
