@@ -8,7 +8,7 @@
 namespace mutils{
 	namespace batched_connection {
 		
-		receiver::connection::connection(Socket &s, id_type id whendebug(, std::ofstream& log_file)):s(s),id(id) whendebug(,log_file(log_file)){}
+		receiver::connection::connection(Socket &s, id_type id whendebug(, std::ostream& log_file)):s(s),id(id) whendebug(,log_file(log_file)){}
 
 		std::size_t receiver::connection::raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const buf){
 			return send_with_id(whendebug(log_file,) s,id,how_many,sizes,buf,total_size(how_many,sizes));

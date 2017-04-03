@@ -85,7 +85,7 @@ namespace mutils {
 					   << "-"
 					   << id;
 					return ss.str(); }()};
-			std::ofstream& get_log_file(){return log_file;}
+			std::ostream& get_log_file(){return log_file;}
 #endif
 			incoming_message_queue &my_queue;
 
@@ -158,10 +158,10 @@ namespace mutils {
 				Socket &s;
 				const id_type id;
 #ifndef NDEBUG
-				std::ofstream &log_file;
-				std::ofstream& get_log_file(){ return log_file;}
+				std::ostream &log_file;
+				std::ostream& get_log_file(){ return log_file;}
 #endif
-				connection(Socket &s, id_type id whendebug(, std::ofstream& log_file));
+				connection(Socket &s, id_type id whendebug(, std::ostream& log_file));
 				connection(connection&& c) = default;
 				std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const buf);
 				bool valid() const;

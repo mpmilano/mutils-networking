@@ -3,7 +3,7 @@
 namespace mutils{
 	namespace batched_connection{
 	
-		std::size_t send_with_id(whendebug(std::ofstream& log_file,) ::mutils::connection& sock, id_type id, std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs, size_type total_size){
+		std::size_t send_with_id(whendebug(std::ostream& log_file,) ::mutils::connection& sock, id_type id, std::size_t how_many, std::size_t const * const sizes, void const * const * const bufs, size_type total_size){
 			
 			std::size_t size_bufs[how_many + 2];
 			size_bufs[0] = sizeof(id);

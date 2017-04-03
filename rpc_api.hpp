@@ -12,6 +12,6 @@ namespace mutils {
 		
 		using action_t = std::unique_ptr<ReceiverFun>;
 		
-		using new_connection_t = std::function<action_t (whendebug(std::ofstream&,) connection& c ) >;
+		using new_connection_t = std::function<action_t (whendebug(std::ostream&,) connection& c ) >;
 	}
 };

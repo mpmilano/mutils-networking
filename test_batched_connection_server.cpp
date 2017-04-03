@@ -16,7 +16,7 @@ int main(int argc, char* argv[]){
 #ifndef NDEBUG
 	std::set<connection*> used_connections;
 #endif
-	conn_space::receiver{portno,[&](whendebug(std::ofstream&), connection& c){
+	conn_space::receiver{portno,[&](whendebug(std::ostream&), connection& c){
 				//std::cout << "receiver triggered" << std::endl;
 				struct ReceiverFun : public conn_space::ReceiverFun {
 					bool on_first_message{true};
