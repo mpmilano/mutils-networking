@@ -7,6 +7,7 @@
 #include <memory>
 #include <sstream>
 #include <cstring>
+#include "AsyncObject.hpp"
 
 //purpose: wrap epoll logic in a class for easier use.
 //the epoll logic contained herein is from https://banu.com/blog/2/how-to-use-epoll-a-complete-example-in-c/
@@ -95,20 +96,22 @@ struct EPoll{
 	FDType& add(std::unique_ptr<FDType> new_fd, std::function<void (EPoll&,FDType&)> action){
 		using namespace std;
 		auto infd = new_fd->underlying_fd();
-		event.data.fd = infd;
-		event.events = EPOLLIN;
-		#ifndef NDEBUG
-		auto retcode = 
-		#endif
-			epoll_ctl (epoll_fd, EPOLL_CTL_ADD, infd, &event);
-		#ifndef NDEBUG
-		if (retcode == -1){
-			std::cerr << std::strerror(errno) << std::endl;
-			std::cerr << infd << std::endl;
-			std::cerr << typeid(*new_fd).name() << std::endl;
+		if (infd != AsyncObject::always_block_code::value){
+			event.data.fd = infd;
+			event.events = EPOLLIN;
+#ifndef NDEBUG
+			auto retcode = 
+#endif
+				epoll_ctl (epoll_fd, EPOLL_CTL_ADD, infd, &event);
+#ifndef NDEBUG
+			if (retcode == -1){
+				std::cerr << std::strerror(errno) << std::endl;
+				std::cerr << infd << std::endl;
+				std::cerr << typeid(*new_fd).name() << std::endl;
+			}
+			assert(retcode == 0);
+#endif
 		}
-		assert(retcode == 0);
-		#endif
 		++max_events;
 		returned_events.emplace_back();
 		return *( (FDType*) fd_lookup.emplace(infd,epoll_action{std::move(new_fd),action}).first->second.epoll_obj);
@@ -117,10 +120,12 @@ struct EPoll{
 	template<typename FDType>
 	std::unique_ptr<FDType> remove(const FDType& fd){
 		int raw_fd = fd.underlying_fd();
-		event.data.fd = raw_fd;
-		event.events = EPOLLIN;
 		auto ret = std::move(fd_lookup.at(raw_fd));
-		epoll_ctl (epoll_fd, EPOLL_CTL_DEL, raw_fd, &event);
+		if (raw_fd != AsyncObject::always_block_code::value){
+			event.data.fd = raw_fd;
+			event.events = EPOLLIN;
+			epoll_ctl (epoll_fd, EPOLL_CTL_DEL, raw_fd, &event);
+		}
 		fd_lookup.erase(raw_fd);
 		return std::unique_ptr<FDType>{ret.template release<FDType>()};
 	}
