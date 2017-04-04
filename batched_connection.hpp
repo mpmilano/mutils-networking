@@ -21,7 +21,8 @@ namespace mutils {
 		struct batched_connections_impl;
 		using id_type = unsigned short;
 		using size_type = unsigned short;
-		using BufGen = BufferGenerator<4096*8*8>;
+		using buf_size = std::integral_constant<std::size_t,65534>;
+		using BufGen = BufferGenerator<buf_size::value>;
 		using buf_ptr = BufGen::pointer;
 		static const constexpr std::size_t hdr_size = sizeof(id_type) + sizeof(size_type);
 

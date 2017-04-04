@@ -52,11 +52,6 @@ namespace mutils{
 
 		locked_socket_t connection::process_data (locked_socket_t sock_lock, buf_ptr _payload, size_type payload_size)
 		{
-			#ifndef NDEBUG
-			static auto const max_vector_size =
-				std::numeric_limits<unsigned char>::max()
-				+ (sizeof(std::size_t)*3);
-			#endif
 			auto* payload = &_payload;
 
 			using orphan_t = typename SocketBundle::orphan_t;
@@ -71,7 +66,7 @@ namespace mutils{
 			else {
 				const id_type &id = ((id_type*)payload->payload)[0];
 				const size_type &size = *((size_type*)(payload->payload + sizeof(id_type)));
-				assert(size <= max_vector_size);
+				assert(size <= buf_size::value);
 				if (payload_size < size + hdr_size) {
 					assert(!sock.orphans);
 					sock.orphans =
