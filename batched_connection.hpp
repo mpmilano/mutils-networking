@@ -27,7 +27,7 @@ namespace mutils {
 		static const constexpr std::size_t hdr_size = sizeof(id_type) + sizeof(size_type);
 
 		/** Number of logical connections per physical connection. */
-		static const constexpr unsigned short connection_factor = 8;
+		static const constexpr unsigned short connection_factor = 1;
 		
 		struct incoming_message_queue{
 			std::list<buf_ptr> queue;
@@ -43,7 +43,7 @@ namespace mutils {
 			Socket sock;
 			const id_type socket_id = gensym();
 			std::atomic<id_type> unused_id{0};
-			SimpleConcurrentVector<std::unique_ptr<incoming_message_queue> > incoming{connection_factor*2};
+			SimpleConcurrentVector<std::unique_ptr<incoming_message_queue> > incoming{connection_factor};
 			abortable_locked_guardian socket_lock;
 			
 			//represents a partial message whose
