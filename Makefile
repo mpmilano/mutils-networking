@@ -1,9 +1,18 @@
-CPPFLAGS= -I$(PWD) -I$(PWD)/../  -I$(PWD)/../mutils-networking -I$(PWD)/../mutils -I$(PWD)/../mutils-containers -I$(PWD)/../mutils-serialization -I$(PWD)/../mutils-tasks -g  --std=c++1z -Wall -DMAX_THREADS=$(MAX_THREADS)  -Wall -Werror -Wextra -DNDEBUG
+CPPFLAGS= -I$(PWD) -I$(PWD)/../  -I$(PWD)/../mutils-networking -I$(PWD)/../mutils -I$(PWD)/../mutils-containers -I$(PWD)/../mutils-serialization -I$(PWD)/../mutils-tasks -g  --std=c++1z -Wall -DMAX_THREADS=$(MAX_THREADS)  -Wall -Werror -Wextra 
 LDFLAGS=  --std=c++1z -lpq -lm -pthread
-object_files=ServerSocket.o SerializationSupport.o utils.o Socket.o batched_connection_server.o batched_connection_client.o batched_connection_common.o  eventfd.o epoll.o dual_connection.o dual_connection_superstate.o 
+object_files=ServerSocket.o SerializationSupport.o utils.o Socket.o batched_connection_server.o batched_connection_client.o batched_connection_common.o  eventfd.o epoll.o dual_connection.o dual_connection_superstate.o GlobalPool.o
 
 dc_test: $(object_files)
 	clang++ -O3 test_dual_connection.cpp $(object_files) $(CPPFLAGS) $(LDFLAGS) -o dc_test
+
+test_batched_connection: test_batched_connection_client test_batched_connection_server
+	echo done
+
+test_batched_connection_server: $(object_files)
+	clang++ -o bc_server -O3 $(object_files) test_batched_connection_server.cpp $(CPPFLAGS) $(LDFLAGS)
+
+test_batched_connection_client: $(object_files)
+	clang++ -o bc_client -O3 $(object_files) test_batched_connection_client.cpp $(CPPFLAGS) $(LDFLAGS)
 
 batched_connection_common.o:
 	clang++ -c -O3 ../*/batched_connection_common.cpp $(CPPFLAGS)
