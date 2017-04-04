@@ -1,19 +1,24 @@
 #pragma once
 #include "Socket.hpp"
 #include "ServerSocket.hpp"
-#include "batched_connection_common.hpp"
+#include "rpc_api.hpp"
 
 namespace mutils{
 
 	namespace simple_rpc{
 		struct connection : public ::mutils::connection {
 			Socket s;
+			whendebug(std::ofstream log);
 			void* bonus_item{nullptr};
 			connection(int ip, int portno);
 			
 			std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
 			
 			std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes_o, void const * const * const bufs_o);
+
+#ifndef NDEBUG
+			std::ostream& get_log_file();
+#endif
 			
 			//The following is just boilerplate to forward
 			//templated methods to the superclass
@@ -36,11 +41,6 @@ namespace mutils{
 			}
 			
 		};
-
-		struct ReceiverFun {
-			virtual void operator()(const void*, ::mutils::connection&) = 0;
-			virtual ~ReceiverFun(){}
-		};
 		
 		struct connections {
 			const int ip;
@@ -53,7 +53,7 @@ namespace mutils{
 		};
 		
 		struct receiver {
-			using action_t = std::unique_ptr<ReceiverFun>;
+			using action_t = rpc::action_t;
 			
 			const int listen;
 			
@@ -61,7 +61,7 @@ namespace mutils{
 		
 			void loop_until_false_set();
 		
-			receiver(int port,std::function<action_t () > new_connection);
+			receiver(int port,rpc::new_connection_t new_connection);
 		};
 	}
 }
