@@ -44,6 +44,10 @@ namespace mutils{
 		void receiver::loop_until_false_set(){
 			acl.loop_until_dead(listen,true);
 		}
+
+		void receiver::acceptor_fun(){
+			loop_until_false_set();
+		}
 		
 		receiver::receiver(int port,rpc::new_connection_t new_connection)
 			:listen(port),acl{

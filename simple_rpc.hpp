@@ -60,6 +60,7 @@ namespace mutils{
 			AcceptConnectionLoop acl;
 		
 			void loop_until_false_set();
+			void acceptor_fun();
 		
 			receiver(int port,rpc::new_connection_t new_connection);
 		};
