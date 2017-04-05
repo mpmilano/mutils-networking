@@ -1,6 +1,6 @@
-CPPFLAGS= -I$(PWD) -I$(PWD)/../  -I$(PWD)/../mutils-networking -I$(PWD)/../mutils -I$(PWD)/../mutils-containers -I$(PWD)/../mutils-serialization -I$(PWD)/../mutils-tasks -g  --std=c++1z -Wall -DMAX_THREADS=$(MAX_THREADS)  -Wall -Werror -Wextra 
+CPPFLAGS= -I$(PWD) -I$(PWD)/../  -I$(PWD)/../mutils-networking -I$(PWD)/../mutils -I$(PWD)/../mutils-containers -I$(PWD)/../mutils-serialization -I$(PWD)/../mutils-tasks -g  --std=c++1z -Wall -DMAX_THREADS=$(MAX_THREADS)  -Wall -Werror -Wextra -DNDEBUG
 LDFLAGS=  --std=c++1z -lpq -lm -pthread
-object_files=ServerSocket.o SerializationSupport.o utils.o Socket.o batched_connection_server.o batched_connection_client.o batched_connection_common.o  eventfd.o epoll.o dual_connection.o dual_connection_superstate.o GlobalPool.o
+object_files=ServerSocket.o SerializationSupport.o utils.o Socket.o batched_connection_server.o batched_connection_client.o batched_connection_common.o  eventfd.o epoll.o dual_connection.o dual_connection_superstate.o GlobalPool.o simple_rpc.o
 
 dc_test: $(object_files)
 	clang++ -O3 test_dual_connection.cpp $(object_files) $(CPPFLAGS) $(LDFLAGS) -o dc_test
@@ -14,8 +14,21 @@ test_batched_connection_server: $(object_files)
 test_batched_connection_client: $(object_files)
 	clang++ -o bc_client -O3 $(object_files) test_batched_connection_client.cpp $(CPPFLAGS) $(LDFLAGS)
 
+test_simple_rpc: test_simple_rpc_client test_simple_rpc_server
+	echo done
+
+test_simple_rpc_server: $(object_files)
+	clang++ -o srpc_server -O3 $(object_files) test_simple_rpc_server.cpp $(CPPFLAGS) $(LDFLAGS)
+
+test_simple_rpc_client: $(object_files)
+	clang++ -o srpc_client -O3 $(object_files) test_simple_rpc_client.cpp $(CPPFLAGS) $(LDFLAGS)
+
+
 batched_connection_common.o:
 	clang++ -c -O3 ../*/batched_connection_common.cpp $(CPPFLAGS)
+
+simple_rpc.o:
+	clang++ -c -O3 ../*/simple_rpc.cpp $(CPPFLAGS)
 
 batched_connection_client.o:
 	clang++ -c -O3 ../*/batched_connection_client.cpp $(CPPFLAGS)
