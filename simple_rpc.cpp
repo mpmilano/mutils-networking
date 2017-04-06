@@ -6,9 +6,9 @@ namespace mutils{
 
 		connection::connection(int ip, int portno):
 			s(ip,portno)
-			whendebug(, log(std::string("/tmp/simple-client-") + std::to_string((std::size_t) mutils::gensym())))
+			whendebug(, lognum((std::size_t) mutils::gensym()), log(std::string("/tmp/simple-client-") + std::to_string(lognum)))
 		{
-			whendebug(s.send((std::size_t) this));
+			whendebug(s.send(lognum));
 		}
 		std::size_t connection::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs) {
 			//std::cout << "sub-process receive expects " << total_size(how_many,sizes) << " bytes" << std::endl;

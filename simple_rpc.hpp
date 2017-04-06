@@ -8,6 +8,7 @@ namespace mutils{
 	namespace simple_rpc{
 		struct connection : public ::mutils::connection {
 			Socket s;
+			whendebug(std::size_t lognum);
 			whendebug(std::ofstream log);
 			void* bonus_item{nullptr};
 			connection(int ip, int portno);
