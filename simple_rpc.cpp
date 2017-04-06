@@ -53,6 +53,7 @@ namespace mutils{
 			:listen(port),acl{
 			//This function is onReceipt in ServerSocket.cpp
 			[new_connection](bool &alive, Socket s) {
+				try {
 #ifndef NDEBUG
 				struct simple_rpc_connection : public ::mutils::connection{
 					std::ofstream log_file;
@@ -87,6 +88,10 @@ namespace mutils{
 #ifndef NDEBUG
 				}
 #endif
+				}
+				catch(BrokenSocketException&){
+					//that's fine, just let the thread exit.
+				}
 			}}
             {}
 	}
