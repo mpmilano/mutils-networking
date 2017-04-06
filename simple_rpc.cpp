@@ -11,7 +11,8 @@ namespace mutils{
 			whendebug(s.send(lognum));
 		}
 		std::size_t connection::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs) {
-			//std::cout << "sub-process receive expects " << total_size(how_many,sizes) << " bytes" << std::endl;
+			whendebug(get_log_file() << "receive: expecting " << total_size(how_many,sizes) << " bytes" << std::endl);
+			whendebug(get_log_file().flush());
 			return s.raw_receive(how_many,sizes,bufs);
 		}
 		std::size_t connection::raw_send(std::size_t how_many, std::size_t const * const sizes_o, void const * const * const bufs_o) {
@@ -22,6 +23,8 @@ namespace mutils{
 			bufs[0] = &real_size;
 			memcpy(sizes + 1,sizes_o,how_many * sizeof(std::size_t));
 			memcpy(bufs + 1,bufs_o,how_many * sizeof(void*));
+			whendebug(get_log_file() << "send: sending " << total_size(how_many,sizes_o) << " bytes" << std::endl);
+			whendebug(get_log_file().flush());
 			return s.raw_send(how_many+1,sizes,bufs) - sizes[0];
 		}
 
@@ -63,9 +66,13 @@ namespace mutils{
 						 s(s){}
 					bool valid() const {return s.valid();}
 					std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
+						whendebug(get_log_file() << "receive: expecting " << total_size(how_many,sizes) << " bytes" << std::endl);
+						whendebug(get_log_file().flush());
 						return s.raw_receive(how_many,sizes,bufs);
 					}
 					std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const v){
+						whendebug(get_log_file() << "send: sending " << total_size(how_many,sizes) << " bytes" << std::endl);
+						whendebug(get_log_file().flush());
 						return s.raw_send(how_many,sizes,v);
 					}
 					std::ostream& get_log_file(){return log_file;}

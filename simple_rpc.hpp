@@ -10,7 +10,6 @@ namespace mutils{
 			Socket s;
 			whendebug(std::size_t lognum);
 			whendebug(std::ofstream log);
-			void* bonus_item{nullptr};
 			connection(int ip, int portno);
 			
 			std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
