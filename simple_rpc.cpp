@@ -27,7 +27,7 @@ namespace mutils{
 
 #ifndef NDEBUG
 		std::ostream& connection::get_log_file(){
-			return s.get_log_file();
+			return log;
 		}
 #endif
 		

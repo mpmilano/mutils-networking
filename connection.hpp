@@ -7,7 +7,7 @@
 namespace mutils{
 
 //interface.
-struct connection{
+struct connection {
 	virtual bool valid() const = 0;
 	virtual std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs) = 0;
 	virtual std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const) = 0;
@@ -111,10 +111,14 @@ struct connection{
 		return receive_data(size,data);
 	}
 
-	auto send (std::size_t size, void const * const data){
+	auto send_data (std::size_t size, void const * const data){
 		std::size_t sizes[] = {size};
 		const void* bufs[] = {data};
 		return raw_send(1,sizes,bufs);
+	}
+	
+	auto send (std::size_t size, void const * const data){
+		return send_data(size,data);
 	}
 	
 };
