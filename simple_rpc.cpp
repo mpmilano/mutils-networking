@@ -6,7 +6,7 @@ namespace mutils{
 
 		connection::connection(int ip, int portno):
 			s(ip,portno)
-			whendebug(, log(std::string("/tmp/simple-client-") + std::to_string((std::size_t) this)))
+			whendebug(, log(std::string("/tmp/simple-client-") + std::to_string((std::size_t) mutils::gensym())))
 		{
 			whendebug(s.send((std::size_t) this));
 		}
