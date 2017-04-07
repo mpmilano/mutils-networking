@@ -11,9 +11,8 @@
 #include <thread>
 #include <netinet/tcp.h>
 
-namespace mutils{
-	
-	struct SocketException{};
+namespace mutils{	
+
 	struct ProtocolException : public std::exception{
 		const std::string why;
 		ProtocolException(std::string why):why(why){}
@@ -22,6 +21,10 @@ namespace mutils{
 		}
 
 		virtual ~ProtocolException(){}
+	};
+
+	struct SocketException : public ProtocolException{
+		SocketException():ProtocolException("Error on socket construction"){}
 	};
 
 	struct BrokenSocketException : public ProtocolException {
@@ -38,7 +41,8 @@ namespace mutils{
 	struct Socket : public connection {
 	private:
 		const int sockID{0};
-		bool is_valid{false};
+		bool is_valid{sockID > 0};
+		bool is_cleanly_disconnected{sockID == 0};
 		whendebug(std::string why_not_valid);
 		
 	public:
