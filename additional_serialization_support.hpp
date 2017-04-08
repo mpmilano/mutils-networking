@@ -61,7 +61,7 @@ namespace mutils{
 		if (std::is_pod<member>::value && !std::is_same<bool,member>::value){
 			std::unique_ptr<T> ret{new T()};
 			if (size > 0){
-				ret->resize(size);
+				ret->reserve(size);
 				c.receive_data(size,ret->data());
 			}
 			return ret;
