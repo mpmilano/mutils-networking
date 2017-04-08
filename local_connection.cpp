@@ -5,7 +5,7 @@
 namespace mutils{
 	bool local_connection::valid() const {return true;}
 	std::size_t local_connection::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs) {
-		auto data_size = data.size() - pos;
+		whendebug(auto data_size = data.size() - pos;)
 		auto data_p = data.data() + pos;
 		auto size = total_size(how_many,sizes);
 		assert(size <= data_size);
