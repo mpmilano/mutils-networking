@@ -45,7 +45,7 @@ namespace mutils{
 
 	template<typename T>
 	std::enable_if_t<std::is_pod<T>::value,std::unique_ptr<T> > receive_from_connection(DeserializationManager*, mutils::connection &c){
-		auto ret = std::make_unique<T>();
+		std::unique_ptr<T> ret{reinterpret_cast<T*>(operator new(sizeof(T)))};
 		c.receive(*ret);
 		return ret;
 	}
@@ -61,7 +61,7 @@ namespace mutils{
 		if (std::is_pod<member>::value && !std::is_same<bool,member>::value){
 			std::unique_ptr<T> ret{new T()};
 			if (size > 0){
-				ret->resize(size);
+				ret->reserve(size);
 				c.receive_data(size,ret->data());
 			}
 			return ret;
