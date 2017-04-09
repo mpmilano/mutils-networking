@@ -52,6 +52,14 @@ namespace mutils{
 
 	template<typename T>
 	std::enable_if_t<is_vector<T>::value,std::unique_ptr<T> > receive_from_connection(DeserializationManager* dsm, mutils::connection &c){
+#ifndef NDEBUG
+		const static std::string typenonce = type_name<T>();
+		const auto typenonce_size = bytes_size(typenonce);
+		char remote_string[typenonce_size];
+		bzero(remote_string,typenonce_size);
+		c.receive_data(typenonce_size,remote_string);
+		assert(typenonce == remote_string);
+#endif
 		using member = typename T::value_type;
 		static_assert(!std::is_same<bool,member>::value);
 		int _size{-1};
