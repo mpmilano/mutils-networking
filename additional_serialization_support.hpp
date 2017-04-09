@@ -58,6 +58,10 @@ namespace mutils{
 		char remote_string[typenonce_size];
 		bzero(remote_string,typenonce_size);
 		c.receive_data(typenonce_size,remote_string);
+		if (typenonce != remote_string){
+			std::cout << typenonce << std::endl << std::endl;
+			std::cout << remote_string << std::endl;
+		}
 		assert(typenonce == remote_string);
 #endif
 		using member = typename T::value_type;
