@@ -3,16 +3,16 @@
 #include <mutex>
 #include <fstream>
 #include <sstream>
-#include "abortable_lock.hpp"
+#include "../mutils-tasks/abortable_lock.hpp"
 #include <atomic>
-#include "SimpleConcurrentVector.hpp"
+#include "../mutils-containers/SimpleConcurrentVector.hpp"
 #include "ServerSocket.hpp"
-#include "buffer_generator.hpp"
+#include "../mutils-containers/buffer_generator.hpp"
 #include "epoll.hpp"
 #include "readerwriterqueue.h"
 #include "interruptible_connection.hpp"
-#include "better_constructable_array.hpp"
-#include "eventfd.hpp"
+#include "../mutils-containers/better_constructable_array.hpp"
+#include "../mutils-tasks/eventfd.hpp"
 #include "rpc_api.hpp"
 
 namespace mutils {

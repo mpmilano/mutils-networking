@@ -1,6 +1,6 @@
 #include "batched_connection.hpp"
 #include "simple_rpc.hpp"
-#include "GlobalPool.hpp"
+#include "../mutils-tasks/GlobalPool.hpp"
 #include <unistd.h>
 
 using namespace mutils;

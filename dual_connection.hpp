@@ -1,12 +1,12 @@
 #pragma once
 #include "connection.hpp"
-#include "eventfd.hpp"
+#include "../mutils-tasks/eventfd.hpp"
 #include "rpc_api.hpp"
-#include "SimpleConcurrentMap.hpp"
-#include "ctpl_stl.h"
+#include "../mutils-containers/SimpleConcurrentMap.hpp"
+#include "../mutils-tasks/ctpl_stl.h"
 #include "interruptible_connection.hpp"
 #include "epoll.hpp"
-#include "SimpleConcurrentVector.hpp"
+#include "../mutils-containers/SimpleConcurrentVector.hpp"
 
 namespace mutils{
 
