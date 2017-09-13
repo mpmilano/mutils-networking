@@ -30,7 +30,7 @@ namespace mutils{
 	}
 #ifndef NDEBUG
 	std::ostream& local_connection::get_log_file(){
-		return ss;
+	  return *out;
 	}
 #endif
 		
