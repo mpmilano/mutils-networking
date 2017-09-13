@@ -7,8 +7,8 @@ namespace mutils{
 		std::vector<char> data;
 		std::size_t pos{0};
 #ifndef NDEBUG
-	  std::ostream* out{nullptr};
-	  local_connection(std::ostream& o):out(&o){}
+	  std::ostream& out;
+	  local_connection(std::ostream& o):out(o){}
 #endif
 		bool valid() const;
 		std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs);
