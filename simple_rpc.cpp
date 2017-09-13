@@ -13,7 +13,10 @@ namespace mutils{
 		std::size_t connection::raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs) {
 			whendebug(get_log_file() << "receive: expecting " << total_size(how_many,sizes) << " bytes" << std::endl);
 			whendebug(get_log_file().flush());
-			return s.raw_receive(how_many,sizes,bufs);
+                        auto ret = s.raw_receive(how_many,sizes,bufs);
+                        whendebug(get_log_file() << "receive: got " << ret << " bytes" << std::endl);
+                        whendebug(get_log_file().flush());
+                        return ret;
 		}
 		std::size_t connection::raw_send(std::size_t how_many, std::size_t const * const sizes_o, void const * const * const bufs_o) {
 			std::size_t real_size = total_size(how_many,sizes_o);
@@ -68,7 +71,10 @@ namespace mutils{
 					std::size_t raw_receive(std::size_t how_many, std::size_t const * const sizes, void ** bufs){
 						whendebug(get_log_file() << "receive: expecting " << total_size(how_many,sizes) << " bytes" << std::endl);
 						whendebug(get_log_file().flush());
-						return s.raw_receive(how_many,sizes,bufs);
+                                                auto ret = s.raw_receive(how_many,sizes,bufs);
+                                                whendebug(get_log_file() << "receive: received " << ret << " bytes" << std::endl);
+                                                whendebug(get_log_file().flush());
+                                                return ret;
 					}
 					std::size_t raw_send(std::size_t how_many, std::size_t const * const sizes, void const * const * const v){
 						whendebug(get_log_file() << "send: sending " << total_size(how_many,sizes) << " bytes" << std::endl);
@@ -86,6 +92,7 @@ namespace mutils{
 					auto processor = new_connection(whendebug(s.get_log_file(),) s);
 					while (alive) {
 						std::size_t size{0};
+                                                whendebug(s.get_log_file() << "Ready for new command" << std::endl; s.get_log_file().flush());
 						s.receive(size);
 						char buf[size];
 						void* buf_p = &buf;
