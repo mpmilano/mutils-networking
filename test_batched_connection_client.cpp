@@ -86,7 +86,7 @@ int main(int argc, char* argv[]){
 								//cout << ss.str();
 							}
 							auto received_other_message = c_super.receive<std::vector<unsigned char> >
-								((DeserializationManager*)nullptr, wire_size);
+								((DeserializationManager<>*)nullptr, wire_size);
 							//std::cout << "received my other message reply" << std::endl;
 							bool has_been_off = false;
 							assert(my_other_message.size() == received_other_message->size());

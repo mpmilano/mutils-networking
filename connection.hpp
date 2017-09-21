@@ -54,20 +54,20 @@ struct connection {
 
 	template<typename> using make_these_ints = int;
 
-	template<typename Fst>
-	auto receive_helper(DeserializationManager* dsm, void** recv, int indx = 0){
+	template<typename Fst, typename... ctx>
+	auto receive_helper(DeserializationManager<ctx...>* dsm, void** recv, int indx = 0){
 		return std::make_tuple(from_bytes<Fst>(dsm,(char*)recv[indx]));
 	}
 
-	template<typename Fst, typename Snd, typename... Rst>
-	auto receive_helper(DeserializationManager* dsm, void** recv, int indx = 0){
+	template<typename Fst, typename Snd, typename DSM, typename... Rst>
+	auto receive_helper(DSM* dsm, void** recv, int indx = 0){
 		return std::tuple_cat(
 			std::make_tuple(from_bytes<Fst>(dsm,(char*)recv[indx])),
 			receive_helper<Snd,Rst...>(dsm,recv,indx+1));
 	}
 	
-	template<typename T1, typename... T2>
-	auto receive(DeserializationManager* dsm,
+	template<typename T1, typename DSM, typename... T2>
+	auto receive(DSM* dsm,
 				 int size,
 				 make_these_ints<T2>... sizes){
 		static_assert(std::is_base_of<ByteRepresentable, T1>::value &&
@@ -79,8 +79,8 @@ struct connection {
 		raw_receive(sizeof...(T2) + 1 ,size_buf,recv);
 		return receive_helper<T1,T2...>(dsm,recv);
 	}
-	template<typename T>
-	auto receive(DeserializationManager* dsm, std::size_t size){
+	template<typename T, typename... ctxs>
+	auto receive(DeserializationManager<ctxs...>* dsm, std::size_t size){
 		void* recv[] = {alloca(size)};
 		void** _recv = recv;
 		std::size_t size_buf[] = {size};
