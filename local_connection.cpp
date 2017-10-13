@@ -35,6 +35,11 @@ namespace mutils{
 	}
 
 	void local_connection::dump_bytes(){
+		for (auto &c : lc.data){
+			if (c){
+				c = *(char*)hidden_identity(&c);
+			}
+		}
 		std::ofstream dump{"/dev/null"};
 		dump.write(data.data(),data.size());
 		dump.flush();
