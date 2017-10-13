@@ -16,5 +16,8 @@ namespace mutils{
 		char* raw_buf();
 		void mark_used(std::size_t);
 		whendebug(std::ostream& get_log_file());
+#ifndef NDEBUG
+		void dump_bytes();
+#endif
 	};
 }

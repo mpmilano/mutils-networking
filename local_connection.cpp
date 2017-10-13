@@ -1,6 +1,7 @@
 #include "../mutils/mutils.hpp"
 #include "connection.hpp"
 #include "local_connection.hpp"
+#include <fstream>
 
 namespace mutils{
 	bool local_connection::valid() const {return true;}
@@ -32,6 +33,13 @@ namespace mutils{
 	std::ostream& local_connection::get_log_file(){
 	  return out;
 	}
+
+	void local_connection::dump_bytes(){
+		std::ofstream dump{"/dev/null"};
+		dump.write(data.data(),data.size());
+		dump.flush();
+	}
+	
 #endif
 		
 }
