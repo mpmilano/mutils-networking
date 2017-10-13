@@ -35,7 +35,7 @@ namespace mutils{
 	}
 
 	void local_connection::dump_bytes(){
-		for (auto &c : lc.data){
+		for (auto &c : data){
 			if (c){
 				c = *(char*)hidden_identity(&c);
 			}
