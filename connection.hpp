@@ -1,8 +1,8 @@
 #pragma once
 #include <memory>
 #include <fstream>
-#include "../mutils-serialization/SerializationSupport.hpp"
-#include "../mutils/extras"
+#include "mutils-serialization/SerializationSupport.hpp"
+#include "mutils/extras"
 
 namespace mutils{
 
@@ -17,7 +17,7 @@ struct connection {
 #endif
 	template<typename... T>
 	void receive(T&... t){
-		static_assert(forall_nt(std::is_pod<T>::value...),
+		static_assert(forall_nt((std::is_standard_layout<T>::value && std::is_trivial<T>::value)...),
 					  "Error: can't do non-POD right now");
 		/*std::cout << "yup you called this one" << std::endl; //*/
 		void* recv[] = {&t...};
@@ -34,7 +34,7 @@ struct connection {
 
 	template<typename... T>
 	auto receive(){
-		static_assert(forall_nt(std::is_pod<T>::value...),
+		static_assert(forall_nt((std::is_standard_layout<T>::value && std::is_trivial<T>::value)...),
 					  "Error: can't do non-POD right now");
 		static_assert(forall_nt(std::is_trivially_constructible<T>::value...),
 					  "Error: can't build this with new correctly");
@@ -126,7 +126,7 @@ struct connection {
 	//useful utilities for wrapping connections
 
 #define MUTILS_CONNECTION_PREPEND_EXTRA_BODY												\
-	static_assert(std::is_pod<T>::value, "Error: POD only for now" ); \
+	static_assert((std::is_standard_layout<T>::value && std::is_trivial<T>::value), "Error: POD only for now" ); \
 	using namespace std;																							\
 	auto new_how_many = old_how_many+1;																\
 	std::size_t new_sizes[new_how_many];															\
