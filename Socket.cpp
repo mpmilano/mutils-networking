@@ -14,14 +14,19 @@ namespace mutils{
 	Socket::~Socket(){
 		if (is_valid && sockID > 0) {
 			close(sockID);
+			is_valid=false;
+			whendebug(why_not_valid="socket closed in destructor");
 		}
 	}
 	
 	Socket::Socket(int sockID):
 		sockID(sockID),
-		is_valid(sockID > 0){}
+		is_valid(sockID > 0){
+			assert(is_valid || why_not_valid != "no reason set for invalidity of socket!");
+		}
 
 	bool Socket::valid() const {
+		assert(is_valid || why_not_valid != "no reason set for invalidity of socket!");
 		return is_valid && sockID > 0;
 	}
 
@@ -73,7 +78,11 @@ namespace mutils{
 	
 	Socket::Socket(int ip, int portno)
 		:sockID(connect_socket(ip,portno)),
-		 is_valid(sockID > 0),is_cleanly_disconnected(false){}
+		 is_valid(sockID > 0),is_cleanly_disconnected(false){
+			whendebug(if (!is_valid) this->why_not_valid = "initial connection failed");
+			assert(is_valid || why_not_valid != "no reason set for invalidity of socket!");
+
+		 }
 
 	Socket::Socket(Socket&& o)
 		:sockID(o.sockID),
@@ -82,6 +91,7 @@ namespace mutils{
 	{
 		o.is_valid = false;
 		whendebug(o.why_not_valid = "Socket moved away");
+		whendebug(if (is_valid==false) this->why_not_valid = "move-constructed from invalid socket" );
 	}
 	
 	Socket Socket::connect(int ip, int portno){

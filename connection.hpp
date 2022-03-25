@@ -47,7 +47,7 @@ struct connection {
 	}
 	
 	template<typename T>
-	void receive_tpl(){
+	decltype(auto) receive_tpl(){
 		T *t{nullptr};
 		return receive_tpl(t);
 	}

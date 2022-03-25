@@ -90,6 +90,7 @@ namespace mutils{
 				std::thread([alive = this->alive,
 							 onReceipt = this->onReceipt,
 							 sock = ss.receive()] () mutable {
+								 assert(sock.valid());
 								onReceipt(*alive,std::move(sock));
 							}).detach();
 			}
